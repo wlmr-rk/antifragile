@@ -52,22 +52,25 @@
   .todo-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: var(--color-surface-1);
-    border: 1px solid var(--color-border-subtle);
+    gap: 14px;
+    padding: 14px 18px;
+    background: var(--glass-surface-1);
+    backdrop-filter: blur(var(--blur-md));
+    -webkit-backdrop-filter: blur(var(--blur-md));
+    border: 1px solid var(--border-glass);
     border-radius: var(--radius-md);
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     transition: all var(--transition-fast);
     box-shadow: var(--shadow-sm);
   }
 
   .todo-item.optimistic {
-    opacity: 0.6;
+    opacity: 0.5;
   }
 
   .todo-item:active {
     transform: scale(0.98);
+    background: var(--glass-surface-2);
   }
 
   .todo-checkbox {
@@ -83,14 +86,16 @@
   .checkbox-inner {
     width: 24px;
     height: 24px;
-    border: 2px solid var(--color-border-strong);
-    border-radius: 6px;
+    border: 2px solid var(--border-glass-strong);
+    border-radius: var(--radius-xs);
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all var(--transition-fast);
     color: transparent;
-    background: var(--color-surface-2);
+    background: var(--glass-surface-1);
+    backdrop-filter: blur(var(--blur-sm));
+    -webkit-backdrop-filter: blur(var(--blur-sm));
     box-shadow: var(--shadow-inset);
   }
 
@@ -98,21 +103,23 @@
     background: var(--color-accent);
     border-color: var(--color-accent);
     color: white;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-sm), var(--glow-accent);
   }
 
   .todo-text {
     flex: 1;
     font-size: 15px;
+    font-weight: var(--font-weight-medium);
     color: var(--color-text-primary);
     display: flex;
     align-items: center;
     gap: 8px;
     transition: all var(--transition-fast);
+    letter-spacing: -0.01em;
   }
 
   .todo-text.completed {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     text-decoration: line-through;
   }
 
@@ -121,13 +128,14 @@
     height: 4px;
     background: var(--color-accent);
     border-radius: 50%;
+    box-shadow: 0 0 4px var(--color-accent);
     animation: pulse 2s ease-in-out infinite;
   }
 
   .delete-btn {
     flex-shrink: 0;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -140,8 +148,8 @@
   }
 
   .delete-btn:active {
-    background: rgba(239, 68, 68, 0.15);
+    background: rgba(239, 68, 68, 0.12);
     color: var(--color-error);
-    transform: scale(0.9);
+    transform: scale(0.92);
   }
 </style>

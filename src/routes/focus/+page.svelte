@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Grid3x3, Plus, Trash2 } from "@lucide/svelte";
+  import { AlertCircle, Calendar, Flame, Grid3x3, Plus, Trash2, Users } from "@lucide/svelte";
   import { useConvexClient, useQuery } from "convex-svelte";
   import { api } from "../../convex/_generated/api";
   import type { Id } from "../../convex/_generated/dataModel";
@@ -33,7 +33,7 @@
       color: "#ef4444",
       bgColor: "rgba(239, 68, 68, 0.08)",
       borderColor: "rgba(239, 68, 68, 0.3)",
-      icon: "🔥",
+      icon: Flame,
     },
     {
       id: "not-urgent-important" as Quadrant,
@@ -42,7 +42,7 @@
       color: "#3b82f6",
       bgColor: "rgba(59, 130, 246, 0.08)",
       borderColor: "rgba(59, 130, 246, 0.3)",
-      icon: "📅",
+      icon: Calendar,
     },
     {
       id: "urgent-not-important" as Quadrant,
@@ -51,7 +51,7 @@
       color: "#f59e0b",
       bgColor: "rgba(245, 158, 11, 0.08)",
       borderColor: "rgba(245, 158, 11, 0.3)",
-      icon: "👥",
+      icon: Users,
     },
     {
       id: "not-urgent-not-important" as Quadrant,
@@ -60,7 +60,7 @@
       color: "#6b7280",
       bgColor: "rgba(107, 114, 128, 0.08)",
       borderColor: "rgba(107, 114, 128, 0.3)",
-      icon: "🗑️",
+      icon: AlertCircle,
     },
   ];
 
@@ -177,7 +177,9 @@
       >
         <!-- Quadrant Header -->
         <div class="quadrant-header">
-          <div class="quadrant-icon">{quadrant.icon}</div>
+          <div class="quadrant-icon" style="color: {quadrant.color};">
+            <svelte:component this={quadrant.icon} size={20} strokeWidth={2} />
+          </div>
           <div class="quadrant-info">
             <div class="quadrant-title" style="color: {quadrant.color};">
               {quadrant.title}
@@ -271,7 +273,11 @@
       <div class="modal-content" onclick={(e) => e.stopPropagation()}>
         <div class="modal-header">
           <div class="modal-title-group">
-            <span class="modal-icon">{quadrant?.icon}</span>
+            <div class="modal-icon" style="color: {quadrant?.color};">
+              {#if quadrant?.icon}
+                <svelte:component this={quadrant.icon} size={28} strokeWidth={2} />
+              {/if}
+            </div>
             <div>
               <h2 class="modal-title">{quadrant?.title}</h2>
               <p class="modal-subtitle">{quadrant?.subtitle}</p>
@@ -427,7 +433,9 @@
   }
 
   .quadrant-icon {
-    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     line-height: 1;
   }
 
@@ -611,7 +619,9 @@
   }
 
   .modal-icon {
-    font-size: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .modal-title {

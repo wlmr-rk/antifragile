@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { BarChart3, Download, Settings, User } from "@lucide/svelte";
+  import { BarChart3, Calendar, Download, Settings, Target, User } from "@lucide/svelte";
 </script>
 
 <div class="page">
@@ -26,8 +26,14 @@
         <Download size={16} />
         Data Export & Backup
       </div>
-      <div class="feature-item">📊 Weekly/Monthly Reports</div>
-      <div class="feature-item">🎯 Goals & Achievements</div>
+      <div class="feature-item">
+        <Calendar size={16} />
+        Weekly/Monthly Reports
+      </div>
+      <div class="feature-item">
+        <Target size={16} />
+        Goals & Achievements
+      </div>
     </div>
   </div>
 </div>
@@ -48,6 +54,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    color: var(--color-accent);
   }
 
   .empty-title {

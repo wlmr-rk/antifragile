@@ -1,11 +1,14 @@
 <script lang="ts">
   import {
+    Activity,
     BarChart3,
     Calendar,
     CheckCircle,
+    Dumbbell,
     Flame,
     Target,
     TrendingUp,
+    Zap,
   } from "@lucide/svelte";
   import { useQuery } from "convex-svelte";
   import { api } from "../convex/_generated/api";
@@ -137,13 +140,25 @@
 
       <div class="score-insights">
         {#if productivityScore() >= 80}
-          <div class="insight-badge badge-success">🔥 On Fire!</div>
+          <div class="insight-badge badge-success">
+            <Flame size={14} />
+            On Fire!
+          </div>
         {:else if productivityScore() >= 60}
-          <div class="insight-badge badge-primary">💪 Strong</div>
+          <div class="insight-badge badge-primary">
+            <Dumbbell size={14} />
+            Strong
+          </div>
         {:else if productivityScore() >= 40}
-          <div class="insight-badge badge-warning">📈 Building</div>
+          <div class="insight-badge badge-warning">
+            <TrendingUp size={14} />
+            Building
+          </div>
         {:else}
-          <div class="insight-badge badge-error">🎯 Focus Needed</div>
+          <div class="insight-badge badge-error">
+            <Target size={14} />
+            Focus Needed
+          </div>
         {/if}
       </div>
     </div>
@@ -352,7 +367,9 @@
       <div class="insights-list">
         {#if workoutStats.data && workoutStats.data.thisWeek > 0 && completionRate() > 70}
           <div class="insight-item">
-            <div class="insight-icon success">💪</div>
+            <div class="insight-icon success">
+              <Dumbbell size={18} />
+            </div>
             <div class="insight-content">
               <div class="insight-text">
                 <strong>Workout Boost</strong> - {workoutStats.data.thisWeek} workouts
@@ -367,7 +384,9 @@
 
         {#if habitsSummary.data && habitsSummary.data.percentage > 80}
           <div class="insight-item">
-            <div class="insight-icon success">🔥</div>
+            <div class="insight-icon success">
+              <Flame size={18} />
+            </div>
             <div class="insight-content">
               <div class="insight-text">
                 <strong>Habit Streak</strong> - {habitsSummary.data.percentage}%
@@ -385,7 +404,9 @@
 
         {#if runStats.data && runStats.data.thisWeek >= 3}
           <div class="insight-item">
-            <div class="insight-icon info">🏃</div>
+            <div class="insight-icon info">
+              <Activity size={18} />
+            </div>
             <div class="insight-content">
               <div class="insight-text">
                 <strong>Running Rhythm</strong> - {runStats.data.thisWeek} runs per
@@ -400,7 +421,9 @@
 
         {#if dailySummary.data && dailySummary.data.percentage < 50}
           <div class="insight-item">
-            <div class="insight-icon warning">⚡</div>
+            <div class="insight-icon warning">
+              <Zap size={18} />
+            </div>
             <div class="insight-content">
               <div class="insight-text">
                 <strong>Focus Opportunity</strong> - {dailySummary.data
@@ -415,7 +438,9 @@
 
         {#if !habitsSummary.data || habitsSummary.data.totalHabits === 0}
           <div class="insight-item">
-            <div class="insight-icon neutral">🎯</div>
+            <div class="insight-icon neutral">
+              <Target size={18} />
+            </div>
             <div class="insight-content">
               <div class="insight-text">
                 <strong>Build Habits</strong> - Start tracking habits to build consistent
@@ -523,10 +548,14 @@
   }
 
   .insight-badge {
-    padding: 8px 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
     border-radius: var(--radius-full);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: -0.01em;
   }
 
   /* Stats Grid */
@@ -738,30 +767,36 @@
   }
 
   .insight-icon {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: var(--radius-md);
-    font-size: 18px;
     flex-shrink: 0;
+    backdrop-filter: blur(var(--blur-sm));
+    -webkit-backdrop-filter: blur(var(--blur-sm));
+    border: 1px solid var(--border-glass-subtle);
   }
 
   .insight-icon.success {
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--color-success);
   }
 
   .insight-icon.info {
-    background: rgba(59, 130, 246, 0.15);
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--color-info);
   }
 
   .insight-icon.warning {
-    background: rgba(245, 158, 11, 0.15);
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--color-warning);
   }
 
   .insight-icon.neutral {
-    background: var(--color-surface-2);
+    background: var(--glass-surface-2);
+    color: var(--color-text-secondary);
   }
 
   .insight-content {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Dumbbell, Plus, Timer, TrendingUp, Zap } from "@lucide/svelte";
+  import { AlertCircle, Dumbbell, Flame, Frown, Meh, Plus, Smile, Star, Timer, TrendingUp, Zap } from "@lucide/svelte";
   import { useConvexClient, useQuery } from "convex-svelte";
   import { api } from "../../convex/_generated/api";
   const client = useConvexClient();
@@ -129,20 +129,20 @@
         return "var(--color-text-secondary)";
     }
   }
-  function getFeelingEmoji(feeling: string): string {
+  function getFeelingIcon(feeling: string) {
     switch (feeling) {
       case "excellent":
-        return "🔥";
+        return Flame;
       case "good":
-        return "😊";
+        return Smile;
       case "okay":
-        return "😐";
+        return Meh;
       case "tough":
-        return "😓";
+        return Frown;
       case "struggled":
-        return "😰";
+        return AlertCircle;
       default:
-        return "⭐";
+        return Star;
     }
   }
 </script>
@@ -217,7 +217,9 @@
           {#each recentWorkouts.data as workout (workout._id)}
             <div class="workout-card card gesture-press">
               <div class="workout-header">
-                <div class="workout-icon">💪</div>
+                <div class="workout-icon">
+                  <Dumbbell size={24} strokeWidth={2} />
+                </div>
                 <div class="workout-info">
                   <div class="workout-name">{workout.name}</div>
                   <div class="workout-meta">
@@ -305,7 +307,7 @@
                   class="run-feeling"
                   style="color: {getFeelingColor(run.feeling || 'good')};"
                 >
-                  {getFeelingEmoji(run.feeling || "good")}
+                  <svelte:component this={getFeelingIcon(run.feeling || "good")} size={28} strokeWidth={2} />
                 </div>
                 <div class="run-info">
                   <div class="run-stats-main">
@@ -562,7 +564,7 @@
                   class="feeling-btn {runFeeling === feeling ? 'active' : ''}"
                   onclick={() => (runFeeling = feeling)}
                 >
-                  {getFeelingEmoji(feeling)}
+                  <svelte:component this={getFeelingIcon(feeling)} size={20} strokeWidth={2} />
                   <span class="feeling-label">{feeling}</span>
                 </button>
               {/each}
@@ -712,7 +714,10 @@
     margin-bottom: 12px;
   }
   .workout-icon {
-    font-size: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-accent);
   }
   .workout-info {
     flex: 1;
@@ -778,7 +783,9 @@
     gap: 12px;
   }
   .run-feeling {
-    font-size: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .run-info {
     flex: 1;
@@ -829,6 +836,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    color: var(--color-accent);
   }
   .empty-title {
     font-size: 20px;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Calendar, ChevronDown, Plus, Repeat } from "@lucide/svelte";
+  import { Calendar, CheckCircle, ChevronDown, ListTodo, Plus, Repeat } from "@lucide/svelte";
   import { useConvexClient, useQuery } from "convex-svelte";
   import { api } from "../../convex/_generated/api";
   import type { Id } from "../../convex/_generated/dataModel";
@@ -392,11 +392,11 @@
       <div class="empty-state">
         <div class="empty-icon">
           {#if filter === "completed"}
-            ✨
+            <CheckCircle size={56} strokeWidth={1.5} />
           {:else if filter === "daily"}
-            📅
+            <Calendar size={56} strokeWidth={1.5} />
           {:else}
-            📝
+            <ListTodo size={56} strokeWidth={1.5} />
           {/if}
         </div>
         <h3 class="empty-title">
@@ -877,9 +877,11 @@
   }
 
   .empty-icon {
-    font-size: 64px;
-    margin-bottom: 16px;
-    opacity: 0.3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    color: var(--color-text-tertiary);
   }
 
   .empty-title {
