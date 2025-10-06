@@ -519,6 +519,8 @@
   .page {
     background: var(--color-bg-primary);
     position: relative;
+    height: 100%;
+    overflow: hidden;
   }
 
   .page::before {
@@ -548,14 +550,16 @@
   }
 
   .content {
-    padding: 20px 16px 16px 16px;
+    padding: 16px;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    grid-auto-rows: auto;
+    grid-auto-rows: minmax(0, auto);
     gap: 12px;
     position: relative;
     z-index: 1;
-    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   /* Reduced motion support */
@@ -772,7 +776,7 @@
     box-shadow:
       0 8px 24px rgba(0, 0, 0, 0.5),
       inset 0 1px 0 rgba(255, 255, 255, 0.03);
-    min-height: 200px;
+    min-height: 170px;
     display: flex;
     flex-direction: column;
   }
@@ -1049,7 +1053,7 @@
     display: flex;
     flex-direction: column;
     transition: all 0.2s ease;
-    min-height: 200px;
+    min-height: 160px;
   }
 
   .focus-panel:active {
@@ -1228,7 +1232,7 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.03);
     display: flex;
     flex-direction: column;
-    min-height: 200px;
+    min-height: 170px;
   }
 
   .insights-stack {

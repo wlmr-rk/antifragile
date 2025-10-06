@@ -30,7 +30,7 @@
     undefined,
   );
   let filter: "all" | "active" | "completed" | "daily" = $state("all");
-  
+
   // Long press state
   let pressTimer: number | null = null;
 
@@ -383,7 +383,7 @@
           class:overdue={!todo.isCompleted && isOverdue(todo.dueDate)}
           class:optimistic={todo.isOptimistic}
         >
-          <div 
+          <div
             class="todo-item"
             ontouchstart={() => handleLongPressStart(todo)}
             ontouchend={handleLongPressEnd}
@@ -586,11 +586,7 @@
   </Modal>
 
   <!-- Edit Task Modal -->
-  <Modal
-    open={showEditModal}
-    onClose={closeEditModal}
-    title="Edit Task"
-  >
+  <Modal open={showEditModal} onClose={closeEditModal} title="Edit Task">
     <form onsubmit={handleEditTodo} class="add-modal-form">
       <div class="form-group">
         <div class="input-with-toggle">
@@ -618,7 +614,10 @@
         <div class="option-buttons">
           <button
             type="button"
-            class="option-chip {!selectedDueDate || formatDueDate(selectedDueDate) === 'Today' ? 'active' : ''}"
+            class="option-chip {!selectedDueDate ||
+            formatDueDate(selectedDueDate) === 'Today'
+              ? 'active'
+              : ''}"
             onclick={() => setDueDatePreset(0)}
           >
             <Calendar size={14} />
@@ -626,7 +625,10 @@
           </button>
           <button
             type="button"
-            class="option-chip {selectedDueDate && formatDueDate(selectedDueDate) === 'Tomorrow' ? 'active' : ''}"
+            class="option-chip {selectedDueDate &&
+            formatDueDate(selectedDueDate) === 'Tomorrow'
+              ? 'active'
+              : ''}"
             onclick={() => setDueDatePreset(1)}
           >
             Tomorrow
@@ -648,22 +650,34 @@
         <div class="option-buttons">
           <button
             type="button"
-            class="option-chip priority-high {selectedPriority === 'high' ? 'active' : ''}"
-            onclick={() => (selectedPriority = selectedPriority === "high" ? undefined : "high")}
+            class="option-chip priority-high {selectedPriority === 'high'
+              ? 'active'
+              : ''}"
+            onclick={() =>
+              (selectedPriority =
+                selectedPriority === "high" ? undefined : "high")}
           >
             High
           </button>
           <button
             type="button"
-            class="option-chip priority-medium {selectedPriority === 'medium' ? 'active' : ''}"
-            onclick={() => (selectedPriority = selectedPriority === "medium" ? undefined : "medium")}
+            class="option-chip priority-medium {selectedPriority === 'medium'
+              ? 'active'
+              : ''}"
+            onclick={() =>
+              (selectedPriority =
+                selectedPriority === "medium" ? undefined : "medium")}
           >
             Medium
           </button>
           <button
             type="button"
-            class="option-chip priority-low {selectedPriority === 'low' ? 'active' : ''}"
-            onclick={() => (selectedPriority = selectedPriority === "low" ? undefined : "low")}
+            class="option-chip priority-low {selectedPriority === 'low'
+              ? 'active'
+              : ''}"
+            onclick={() =>
+              (selectedPriority =
+                selectedPriority === "low" ? undefined : "low")}
           >
             Low
           </button>
@@ -686,15 +700,23 @@
   <!-- Delete Confirmation Modal -->
   <Modal
     open={showDeleteConfirm}
-    onClose={() => { showDeleteConfirm = false; deletingTodoId = null; }}
+    onClose={() => {
+      showDeleteConfirm = false;
+      deletingTodoId = null;
+    }}
     title="Delete Task"
   >
     <div class="confirm-content">
-      <p>Are you sure you want to delete this task? This action cannot be undone.</p>
+      <p>
+        Are you sure you want to delete this task? This action cannot be undone.
+      </p>
       <div class="confirm-actions">
         <Button
           variant="secondary"
-          onclick={() => { showDeleteConfirm = false; deletingTodoId = null; }}
+          onclick={() => {
+            showDeleteConfirm = false;
+            deletingTodoId = null;
+          }}
         >
           Cancel
         </Button>
@@ -936,7 +958,7 @@
   }
 
   .todo-list {
-    padding: 8px 20px 24px;
+    padding: 0;
   }
 
   /* Todo Items */
@@ -958,7 +980,7 @@
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 14px;
     transition: all 0.2s ease;
-    box-shadow: 
+    box-shadow:
       0 4px 12px rgba(0, 0, 0, 0.4),
       inset 0 1px 0 rgba(255, 255, 255, 0.02);
   }
@@ -1098,7 +1120,8 @@
   }
 
   @keyframes pulse {
-    0%, 100% {
+    0%,
+    100% {
       opacity: 1;
       transform: scale(1);
     }

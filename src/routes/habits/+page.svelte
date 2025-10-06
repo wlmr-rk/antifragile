@@ -381,7 +381,7 @@
 <style>
   .page {
     background: var(--color-bg-primary);
-    padding: 20px;
+    padding: 16px;
     padding-bottom: 24px;
   }
 

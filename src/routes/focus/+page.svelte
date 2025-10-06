@@ -150,31 +150,15 @@
 </script>
 
 <div class="page">
-  <!-- Summary Stats -->
+  <!-- Total Count Header -->
   {#if matrixSummary.data}
-    <div class="summary-card card-glass">
-      <div class="summary-header">
-        <div class="summary-icon">
-          <Grid3x3 size={20} style="color: var(--color-accent);" />
-        </div>
-        <div class="summary-content">
-          <div class="summary-value">{matrixSummary.data.totalActive}</div>
-          <div class="summary-label">Active Tasks</div>
-        </div>
-        <div class="summary-stats">
-          <div class="stat-mini" style="color: #f87171;">
-            {matrixSummary.data.urgentImportant.total}
-          </div>
-          <div class="stat-mini" style="color: #60a5fa;">
-            {matrixSummary.data.notUrgentImportant.total}
-          </div>
-          <div class="stat-mini" style="color: #fbbf24;">
-            {matrixSummary.data.urgentNotImportant.total}
-          </div>
-          <div class="stat-mini" style="color: #9ca3af;">
-            {matrixSummary.data.notUrgentNotImportant.total}
-          </div>
-        </div>
+    <div class="focus-header">
+      <div class="header-icon">
+        <Grid3x3 size={18} strokeWidth={2.5} />
+      </div>
+      <div class="header-text">
+        <div class="header-count">{matrixSummary.data.totalActive}</div>
+        <div class="header-label">Active Tasks</div>
       </div>
     </div>
   {/if}
@@ -184,27 +168,26 @@
     {#each quadrants as quadrant (quadrant.id)}
       {@const tasks = getQuadrantTasks(quadrant.id)}
       <div
-        class="quadrant-card card"
-        style="background: {quadrant.bgColor}; border-color: {quadrant.borderColor}; box-shadow: 0 0 20px {quadrant.glowColor}, 0 4px 12px rgba(0, 0, 0, 0.6);"
+        class="quadrant-card"
+        style="border-color: {quadrant.borderColor}; background: {quadrant.bgColor};"
       >
         <!-- Quadrant Header -->
         <div class="quadrant-header">
-          <div class="quadrant-icon" style="color: {quadrant.color};">
-            <svelte:component this={quadrant.icon} size={20} strokeWidth={2} />
-          </div>
-          <div class="quadrant-info">
-            <div class="quadrant-title" style="color: {quadrant.color};">
-              {quadrant.title}
+          <div class="quadrant-title-row">
+            <div class="quadrant-icon" style="color: {quadrant.color};">
+              <svelte:component this={quadrant.icon} size={16} strokeWidth={2.5} />
             </div>
-            <div class="quadrant-subtitle">{quadrant.subtitle}</div>
+            <div class="quadrant-info">
+              <div class="quadrant-title">{quadrant.title}</div>
+              <div class="quadrant-count" style="color: {quadrant.color};">{tasks.length}</div>
+            </div>
           </div>
           <button
             class="add-task-btn"
-            aria-label="Add task to {quadrant.title}"
+            aria-label="Add task"
             onclick={() => openAddTask(quadrant.id)}
-            style="color: {quadrant.color};"
           >
-            <Plus size={18} />
+            <Plus size={16} strokeWidth={2.5} />
           </button>
         </div>
 
@@ -368,46 +351,43 @@
 <style>
   .page {
     background: var(--color-bg-primary);
-    padding: 20px;
+    padding: 16px;
     padding-bottom: 24px;
   }
 
-  /* Summary Card */
-  .summary-card {
-    padding: 20px;
-    margin-bottom: 20px;
-  }
-
-  .summary-header {
+  /* Focus Header */
+  .focus-header {
     display: flex;
     align-items: center;
     gap: 12px;
+    margin-bottom: 16px;
   }
 
-  .summary-icon {
-    width: 40px;
-    height: 40px;
+  .header-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(167, 139, 250, 0.15);
-    border-radius: var(--radius-md);
-    box-shadow: 0 0 16px rgba(167, 139, 250, 0.3);
+    width: 36px;
+    height: 36px;
+    background: rgba(167, 139, 250, 0.1);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    border-radius: 10px;
+    color: var(--color-accent);
   }
 
-  .summary-content {
+  .header-text {
     flex: 1;
   }
 
-  .summary-value {
+  .header-count {
     font-size: 24px;
     font-weight: 700;
     color: var(--color-text-primary);
     line-height: 1;
   }
 
-  .summary-label {
-    font-size: 13px;
+  .header-label {
+    font-size: 12px;
     color: var(--color-text-secondary);
     margin-top: 2px;
   }
@@ -426,50 +406,67 @@
   .matrix-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: 10px;
   }
 
   .quadrant-card {
-    padding: 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
-    min-height: 200px;
+    min-height: 180px;
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.02);
   }
 
   /* Quadrant Header */
   .quadrant-header {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    align-items: flex-start;
+    justify-content: space-between;
     margin-bottom: 12px;
-    padding-bottom: 12px;
+    padding-bottom: 10px;
     border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .quadrant-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
   }
 
   .quadrant-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
   }
 
   .quadrant-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex: 1;
-    min-width: 0;
   }
 
   .quadrant-title {
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-primary);
     line-height: 1;
-    margin-bottom: 2px;
   }
 
-  .quadrant-subtitle {
-    font-size: 11px;
-    color: var(--color-text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+  .quadrant-count {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
   }
 
   .add-task-btn {
@@ -478,15 +475,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--color-surface-1);
-    border: 1px solid var(--color-border-medium);
-    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    color: var(--color-text-tertiary);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: all 0.2s ease;
   }
 
   .add-task-btn:active {
-    transform: scale(0.9);
+    transform: scale(0.92);
+    background: rgba(255, 255, 255, 0.04);
   }
 
   /* Tasks List */
