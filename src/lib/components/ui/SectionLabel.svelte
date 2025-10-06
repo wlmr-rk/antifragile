@@ -12,7 +12,8 @@
 
 <div class="section-label">
   {#if icon}
-    <svelte:component this={icon} size={14} strokeWidth={2.5} />
+    {@const IconComponent = icon}
+    <IconComponent size={14} strokeWidth={2.5} />
   {/if}
   <span>{@render children()}</span>
 </div>

@@ -12,10 +12,13 @@ export default defineSchema({
     lastCompletedAt: v.optional(v.number()), // Track last completion for daily tasks
     priority: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
     category: v.optional(v.string()),
+    parentId: v.optional(v.id("todos")), // For subtasks (up to 2 levels)
+    level: v.optional(v.number()), // 0 = parent, 1 = subtask, 2 = sub-subtask
   })
     .index("by_created_at", ["createdAt"])
     .index("by_due_date", ["dueDate"])
-    .index("by_is_daily", ["isDaily"]),
+    .index("by_is_daily", ["isDaily"])
+    .index("by_parent", ["parentId"]),
 
   // Habits tracker
   habits: defineTable({

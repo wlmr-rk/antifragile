@@ -2,7 +2,12 @@
   import {
     Calendar,
     CheckCircle,
+    ChevronDown,
+    ChevronRight,
+    Circle,
     ListTodo,
+    Minus,
+    Plus,
     Repeat,
     Trash2,
   } from "@lucide/svelte";
@@ -11,6 +16,7 @@
   import type { Id } from "../../convex/_generated/dataModel";
   import {
     Button,
+    Card,
     Checkbox,
     Input,
     Textarea,
@@ -29,16 +35,17 @@
   let selectedPriority = $state<"low" | "medium" | "high" | undefined>(
     undefined,
   );
-  let filter: "all" | "active" | "completed" | "daily" = $state("all");
+
+  
+  // Subtask state
+  let addingSubtaskTo = $state<Id<"todos"> | null>(null);
+  let expandedTodos = $state<Set<string>>(new Set());
 
   // Long press state
   let pressTimer: number | null = null;
 
   const client = useConvexClient();
-  const todos = useQuery(api.todos.getTodos, () => ({
-    includeCompleted: filter === "all" || filter === "completed",
-    filterDaily: filter === "daily" ? true : undefined,
-  }));
+  const todos = useQuery(api.todos.getTodos, { includeCompleted: true });
 
   const dailySummary = useQuery(api.todos.getDailyTasksSummary, {});
 
@@ -52,6 +59,9 @@
     isDaily: boolean;
     priority?: "low" | "medium" | "high";
     isOptimistic?: boolean;
+    parentId?: Id<"todos">;
+    level?: number;
+    subtasks?: OptimisticTodo[];
   };
 
   let optimisticAdds = $state<OptimisticTodo[]>([]);
@@ -73,20 +83,42 @@
     return result;
   });
 
-  const filteredTodos = $derived(() => {
+  const sortedTodos = $derived(() => {
     const todoList = mergedTodos();
-    if (filter === "active") {
-      return todoList.filter((todo) => !todo.isCompleted);
-    } else if (filter === "completed") {
-      return todoList.filter((todo) => todo.isCompleted);
-    } else if (filter === "daily") {
-      return todoList.filter((todo) => todo.isDaily);
-    }
-    return todoList;
+    
+    // Separate active and completed
+    const active = todoList.filter(t => !t.isCompleted);
+    const completed = todoList.filter(t => t.isCompleted);
+    
+    // Sort active todos
+    const sorted = active.sort((a, b) => {
+      // 1. Daily tasks first
+      if (a.isDaily && !b.isDaily) return -1;
+      if (!a.isDaily && b.isDaily) return 1;
+      
+      // 2. Then by due date (earliest first)
+      if (a.dueDate && b.dueDate) {
+        return a.dueDate - b.dueDate;
+      }
+      if (a.dueDate && !b.dueDate) return -1;
+      if (!a.dueDate && b.dueDate) return 1;
+      
+      // 3. Then by creation date (newest first)
+      return b.createdAt - a.createdAt;
+    });
+    
+    // Return active tasks followed by completed tasks
+    return [...sorted, ...completed];
   });
+
+
 
   const activeCount = $derived(() => {
     return mergedTodos().filter((todo) => !todo.isCompleted).length;
+  });
+
+  const completedTodosCount = $derived(() => {
+    return mergedTodos().filter((todo) => todo.isCompleted).length;
   });
 
   const overdueCount = $derived(() => {
@@ -102,66 +134,123 @@
     if (!trimmedText) return;
 
     const text = trimmedText;
-    // Default to today if no due date selected
-    const dueDate =
-      selectedDueDate ||
-      (() => {
-        const today = new Date();
-        today.setHours(23, 59, 59, 999);
-        return today.getTime();
-      })();
+    const dueDate = selectedDueDate || (() => {
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      return today.getTime();
+    })();
     const daily = isDaily;
     const priority = selectedPriority;
-    const optimisticId = `optimistic-${Date.now()}-${Math.random()}`;
-    const now = Date.now();
+    const parentId = addingSubtaskTo;
 
-    const optimisticTodo: OptimisticTodo = {
-      _id: optimisticId,
-      text,
-      isCompleted: false,
-      createdAt: now,
-      dueDate: dueDate,
-      isDaily: daily,
-      priority: priority,
-      isOptimistic: true,
-    };
-
-    optimisticAdds = [optimisticTodo, ...optimisticAdds];
-    newTodoText = "";
+    // Close modal and reset form
     showAddModal = false;
+    newTodoText = "";
     selectedDueDate = undefined;
     isDaily = false;
     selectedPriority = undefined;
+    addingSubtaskTo = null;
 
     try {
-      await client.mutation(api.todos.addTodo, {
+      const mutationArgs: any = {
         text,
         dueDate: dueDate,
         isDaily: daily,
         priority: priority,
-      });
-      optimisticAdds = optimisticAdds.filter((t) => t._id !== optimisticId);
+      };
+      
+      // Only include parentId if it's not null
+      if (parentId) {
+        mutationArgs.parentId = parentId;
+      }
+      
+      await client.mutation(api.todos.addTodo, mutationArgs);
     } catch (error) {
       console.error("Failed to add todo:", error);
-      optimisticAdds = optimisticAdds.filter((t) => t._id !== optimisticId);
+      // Restore form values on error
       newTodoText = text;
+      selectedDueDate = dueDate;
+      isDaily = daily;
+      selectedPriority = priority;
+      addingSubtaskTo = parentId;
+      showAddModal = true;
     }
   }
 
-  async function handleToggleTodo(id: Id<"todos"> | string) {
+  async function handleToggleTodo(id: Id<"todos"> | string, subtaskIds: Id<"todos">[] = []) {
     if (typeof id === "string" && id.startsWith("optimistic-")) return;
 
     const realId = id as Id<"todos">;
-    optimisticToggles.add(realId);
+    
+    // Add optimistic toggle for the main todo
+    if (optimisticToggles.has(realId)) {
+      optimisticToggles.delete(realId);
+    } else {
+      optimisticToggles.add(realId);
+    }
+    
+    // If this is a parent task with subtasks, toggle all subtasks optimistically
+    if (subtaskIds.length > 0) {
+      // Get the new state of the parent (after toggle)
+      const todo = mergedTodos().find(t => t._id === realId);
+      if (todo) {
+        const newParentState = !todo.isCompleted;
+        
+        // Toggle all subtasks to match parent
+        for (const subtaskId of subtaskIds) {
+          const subtask = mergedTodos().find(t => t._id === subtaskId);
+          if (subtask) {
+            // If subtask state doesn't match new parent state, toggle it
+            if (subtask.isCompleted !== newParentState) {
+              if (optimisticToggles.has(subtaskId)) {
+                optimisticToggles.delete(subtaskId);
+              } else {
+                optimisticToggles.add(subtaskId);
+              }
+            }
+          }
+        }
+      }
+    }
+    
     optimisticToggles = new Set(optimisticToggles);
 
     try {
+      // Toggle the main todo
       await client.mutation(api.todos.toggleTodo, { id: realId });
+      
+      // If this is a parent task with subtasks, toggle all subtasks to match parent state
+      if (subtaskIds.length > 0) {
+        // Get the server data to know which subtasks to toggle
+        const serverTodos = todos.data || [];
+        const parent = serverTodos.find(t => t._id === realId);
+        
+        if (parent) {
+          const newParentState = parent.isCompleted;
+          
+          // Toggle subtasks that don't match the new parent state
+          for (const subtaskId of subtaskIds) {
+            const subtask = serverTodos.find(t => t._id === subtaskId);
+            if (subtask && subtask.isCompleted !== newParentState) {
+              await client.mutation(api.todos.toggleTodo, { id: subtaskId });
+            }
+          }
+        }
+      }
+      
+      // Clear optimistic toggles after successful mutation
       optimisticToggles.delete(realId);
+      for (const subtaskId of subtaskIds) {
+        optimisticToggles.delete(subtaskId);
+      }
       optimisticToggles = new Set(optimisticToggles);
     } catch (error) {
       console.error("Failed to toggle todo:", error);
+      // Revert optimistic toggles on error
       optimisticToggles.delete(realId);
+      for (const subtaskId of subtaskIds) {
+        optimisticToggles.delete(subtaskId);
+      }
       optimisticToggles = new Set(optimisticToggles);
     }
   }
@@ -297,94 +386,58 @@
     selectedPriority = undefined;
     editingTodo = null;
   }
+
+  function toggleExpanded(todoId: string) {
+    const newExpanded = new Set(expandedTodos);
+    if (newExpanded.has(todoId)) {
+      newExpanded.delete(todoId);
+    } else {
+      newExpanded.add(todoId);
+    }
+    expandedTodos = newExpanded;
+  }
+
+  function openAddSubtask(parentId: Id<"todos">) {
+    addingSubtaskTo = parentId;
+    showAddModal = true;
+  }
+
+  // Fetch subtasks for a todo
+  function getSubtasksQuery(parentId: Id<"todos">) {
+    return useQuery(api.todos.getSubtasks, { parentId });
+  }
 </script>
 
 <div class="page">
-  <!-- Floating Filter Pills -->
-  <div class="filter-bar">
-    <button
-      class="filter-pill {filter === 'all' ? 'active' : ''}"
-      onclick={() => (filter = "all")}
-    >
-      <span class="filter-count">{mergedTodos().length}</span>
-      All
-    </button>
-    <button
-      class="filter-pill {filter === 'active' ? 'active' : ''}"
-      onclick={() => (filter = "active")}
-    >
-      <span class="filter-count">{activeCount()}</span>
-      Active
-    </button>
-    <button
-      class="filter-pill {filter === 'daily' ? 'active' : ''}"
-      onclick={() => (filter = "daily")}
-    >
-      <Repeat size={14} strokeWidth={2.5} />
-      Daily
-    </button>
-    <button
-      class="filter-pill {filter === 'completed' ? 'active' : ''}"
-      onclick={() => (filter = "completed")}
-    >
-      <CheckCircle size={14} strokeWidth={2.5} />
-      Done
-    </button>
-  </div>
-
-  <!-- Todo List -->
-  <div class="todo-list">
+  <div class="content">
+    <!-- Todos Grid -->
+    <div class="todos-grid">
     {#if todos.isLoading && !todos.data}
-      <div class="skeleton-list">
-        <div class="skeleton-todo"></div>
-        <div class="skeleton-todo"></div>
-        <div class="skeleton-todo"></div>
-        <div class="skeleton-todo"></div>
-        <div class="skeleton-todo"></div>
+      <div class="loading-state">
+        <div class="loading-pulse"></div>
       </div>
-    {:else if filteredTodos().length === 0}
+    {:else if sortedTodos().length === 0}
       <div class="empty-state">
         <div class="empty-icon">
-          {#if filter === "completed"}
-            <CheckCircle size={56} strokeWidth={1.5} />
-          {:else if filter === "daily"}
-            <Calendar size={56} strokeWidth={1.5} />
-          {:else}
-            <ListTodo size={56} strokeWidth={1.5} />
-          {/if}
+          <ListTodo size={56} strokeWidth={1.5} />
         </div>
-        <h3 class="empty-title">
-          {#if filter === "completed"}
-            No completed tasks
-          {:else if filter === "daily"}
-            No daily tasks yet
-          {:else if filter === "active"}
-            All caught up!
-          {:else}
-            No tasks yet
-          {/if}
-        </h3>
-        <p class="empty-subtitle">
-          {#if filter === "completed"}
-            Complete some tasks to see them here
-          {:else if filter === "daily"}
-            Add recurring tasks to build habits
-          {:else if filter === "active"}
-            You've completed everything. Great work!
-          {:else}
-            Tap the + button to add your first task
-          {/if}
-        </p>
+        <h3 class="empty-title">No tasks yet</h3>
+        <p class="empty-subtitle">Tap the + button to add your first task</p>
       </div>
     {:else}
-      {#each filteredTodos() as todo (todo._id)}
-        <div
-          class="todo-wrapper {todo.isCompleted ? 'completed' : ''}"
-          class:overdue={!todo.isCompleted && isOverdue(todo.dueDate)}
-          class:optimistic={todo.isOptimistic}
+      {#each sortedTodos() as todo (todo._id)}
+        {@const subtasksQuery = typeof todo._id === 'string' && !todo._id.startsWith('optimistic') ? getSubtasksQuery(todo._id as Id<"todos">) : null}
+        {@const subtasks = subtasksQuery?.data || []}
+        {@const completedSubtasks = subtasks.filter(s => s.isCompleted).length}
+        {@const totalSubtasks = subtasks.length}
+        {@const hasPartialCompletion = totalSubtasks > 0 && completedSubtasks > 0 && completedSubtasks < totalSubtasks}
+        {@const hasFullCompletion = totalSubtasks > 0 && completedSubtasks === totalSubtasks}
+        
+        <Card 
+          variant="elevated"
+          class="todo-card {todo.isCompleted ? 'completed' : ''} {todo.priority ? 'priority-' + todo.priority : ''} {!todo.isCompleted && isOverdue(todo.dueDate) ? 'overdue' : ''}"
         >
-          <div
-            class="todo-item"
+          <div class="todo-row"
             ontouchstart={() => handleLongPressStart(todo)}
             ontouchend={handleLongPressEnd}
             ontouchcancel={handleLongPressEnd}
@@ -392,71 +445,97 @@
             onmouseup={handleLongPressEnd}
             onmouseleave={handleLongPressEnd}
           >
-            <button
-              class="todo-check"
-              onclick={() => handleToggleTodo(todo._id)}
+            <Checkbox
+              checked={todo.isCompleted || hasFullCompletion}
+              partial={hasPartialCompletion && !todo.isCompleted}
+              onclick={() => handleToggleTodo(todo._id, subtasks.map(s => s._id as Id<"todos">))}
               disabled={todo.isOptimistic}
-              aria-label={todo.isCompleted
-                ? "Mark incomplete"
-                : "Mark complete"}
-            >
-              <div class="check-box {todo.isCompleted ? 'checked' : ''}">
-                {#if todo.isCompleted}
-                  <CheckCircle size={20} strokeWidth={2.5} />
-                {/if}
-              </div>
-            </button>
-
-            <div class="todo-main">
+            />
+            
+            <div class="todo-content">
               <div class="todo-text">{todo.text}</div>
-              {#if todo.priority || todo.isDaily || todo.dueDate || todo.isOptimistic}
+              {#if todo.priority || todo.isDaily || todo.dueDate || totalSubtasks > 0}
                 <div class="todo-tags">
                   {#if todo.priority}
-                    <span
-                      class="tag tag-priority"
-                      style="--tag-color: {getPriorityColor(todo.priority)};"
-                    >
-                      {todo.priority}
-                    </span>
+                    <span class="tag priority-{todo.priority}">{todo.priority}</span>
                   {/if}
                   {#if todo.isDaily}
-                    <span class="tag tag-daily">
-                      <Repeat size={11} strokeWidth={2.5} />
-                      Daily
-                    </span>
+                    <span class="tag daily"><Repeat size={10} strokeWidth={2.5} /> Daily</span>
                   {/if}
                   {#if todo.dueDate}
-                    <span
-                      class="tag tag-date"
-                      class:tag-overdue={!todo.isCompleted &&
-                        isOverdue(todo.dueDate)}
-                    >
-                      <Calendar size={11} strokeWidth={2.5} />
-                      {formatDueDate(todo.dueDate)}
+                    <span class="tag date {!todo.isCompleted && isOverdue(todo.dueDate) ? 'overdue' : ''}">
+                      <Calendar size={10} strokeWidth={2.5} /> {formatDueDate(todo.dueDate)}
                     </span>
                   {/if}
-                  {#if todo.isOptimistic}
-                    <span class="tag tag-syncing">
-                      <span class="sync-pulse"></span>
-                      syncing
-                    </span>
+                  {#if totalSubtasks > 0}
+                    <span class="tag progress">{completedSubtasks}/{totalSubtasks}</span>
                   {/if}
                 </div>
               {/if}
             </div>
 
-            <button
-              class="todo-delete"
-              onclick={() => confirmDelete(todo._id)}
-              disabled={todo.isOptimistic}
-              aria-label="Delete task"
-            >
-              <Trash2 size={18} strokeWidth={2.5} />
-            </button>
+            <div class="todo-actions">
+              {#if typeof todo._id === 'string' && !todo._id.startsWith('optimistic')}
+                {@const subtasksQuery = getSubtasksQuery(todo._id as Id<"todos">)}
+                {@const subtasks = subtasksQuery.data || []}
+                {#if subtasks.length > 0}
+                  <button
+                    class="action-btn"
+                    onclick={(e) => { e.stopPropagation(); toggleExpanded(todo._id as string); }}
+                  >
+                    {#if expandedTodos.has(todo._id as string)}
+                      <ChevronDown size={16} strokeWidth={2.5} />
+                    {:else}
+                      <ChevronRight size={16} strokeWidth={2.5} />
+                    {/if}
+                  </button>
+                {/if}
+                {#if (todo.level || 0) < 2}
+                  <button
+                    class="action-btn"
+                    onclick={(e) => { e.stopPropagation(); openAddSubtask(todo._id as Id<"todos">); }}
+                  >
+                    <Plus size={16} strokeWidth={2.5} />
+                  </button>
+                {/if}
+              {/if}
+              <button
+                class="action-btn delete"
+                onclick={(e) => { e.stopPropagation(); confirmDelete(todo._id); }}
+                disabled={todo.isOptimistic}
+              >
+                <Trash2 size={16} strokeWidth={2.5} />
+              </button>
+            </div>
           </div>
-        </div>
+
+          {#if typeof todo._id === 'string' && !todo._id.startsWith('optimistic') && expandedTodos.has(todo._id)}
+            {@const subtasksQuery = getSubtasksQuery(todo._id as Id<"todos">)}
+            {@const subtasks = subtasksQuery.data || []}
+            {#if subtasks.length > 0}
+              <div class="subtasks">
+                {#each subtasks as subtask (subtask._id)}
+                  <div class="subtask-row">
+                    <Checkbox
+                      checked={subtask.isCompleted}
+                      onclick={() => handleToggleTodo(subtask._id, [])}
+                    />
+                    <span class="subtask-text">{subtask.text}</span>
+                    <button
+                      class="action-btn delete"
+                      onclick={() => confirmDelete(subtask._id)}
+                    >
+                      <Trash2 size={14} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          {/if}
+        </Card>
       {/each}
     {/if}
+    </div>
   </div>
 
   <!-- Floating Action Button -->
@@ -468,30 +547,39 @@
   <!-- Add Task Modal -->
   <Modal
     open={showAddModal}
-    onClose={() => (showAddModal = false)}
-    title="New Task"
+    onClose={() => { showAddModal = false; addingSubtaskTo = null; }}
+    title={addingSubtaskTo ? "New Subtask" : "New Task"}
   >
     <form onsubmit={handleAddTodo} class="add-modal-form">
+      {#if addingSubtaskTo}
+        <div class="subtask-notice">
+          <span class="notice-icon">↳</span>
+          <span class="notice-text">Adding subtask</span>
+        </div>
+      {/if}
+
       <!-- Task Input with Daily Toggle -->
       <div class="form-group">
         <div class="input-with-toggle">
           <Input
             bind:value={newTodoText}
-            placeholder="What needs to be done?"
+            placeholder={addingSubtaskTo ? "Subtask description..." : "What needs to be done?"}
             id="task-input"
             class="task-input-field"
           />
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isDaily}
-            aria-label="Daily task"
-            class="toggle-btn-inline {isDaily ? 'active' : ''}"
-            onclick={() => (isDaily = !isDaily)}
-            title="Daily Task"
-          >
-            <Repeat size={18} strokeWidth={2.5} />
-          </button>
+          {#if !addingSubtaskTo}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isDaily}
+              aria-label="Daily task"
+              class="toggle-btn-inline {isDaily ? 'active' : ''}"
+              onclick={() => (isDaily = !isDaily)}
+              title="Daily Task"
+            >
+              <Repeat size={18} strokeWidth={2.5} />
+            </button>
+          {/if}
         </div>
       </div>
 
@@ -735,69 +823,273 @@
 <style>
   .page {
     background: var(--color-bg-primary);
+    position: relative;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .content {
     padding: 16px;
-    padding-bottom: 100px;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(0, auto);
+    gap: 16px;
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Filter Bar */
-  .filter-bar {
+
+
+  /* Todos Grid */
+  .todos-grid {
     display: flex;
-    gap: 8px;
-    margin-bottom: 20px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-bottom: 2px;
+    flex-direction: column;
+    gap: 10px;
   }
 
-  .filter-bar::-webkit-scrollbar {
-    display: none;
+  /* Todo Card Styling */
+  :global(.todo-card) {
+    position: relative;
+    padding: 12px !important;
   }
 
-  .filter-pill {
+  :global(.todo-card.completed) {
+    opacity: 0.5;
+  }
+
+  :global(.todo-card.priority-high) {
+    border-left: 3px solid var(--color-error) !important;
+  }
+
+  :global(.todo-card.priority-medium) {
+    border-left: 3px solid var(--color-warning) !important;
+  }
+
+  :global(.todo-card.priority-low) {
+    border-left: 3px solid var(--color-info) !important;
+  }
+
+  :global(.todo-card.overdue) {
+    border-left: 3px solid var(--color-error) !important;
+    background: linear-gradient(135deg, rgba(248, 113, 113, 0.05), rgba(255, 255, 255, 0.02)) !important;
+  }
+
+  .todo-row {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--color-text-tertiary);
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    white-space: nowrap;
-    letter-spacing: 0.02em;
+    gap: 10px;
   }
 
-  .filter-count {
+  .todo-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .todo-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.3;
+    word-break: break-word;
+  }
+
+  :global(.todo-card.completed) .todo-text {
+    text-decoration: line-through;
+    color: var(--color-text-muted);
+  }
+
+  .todo-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .tag.priority-high {
+    background: rgba(248, 113, 113, 0.12);
+    color: var(--color-error);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+  }
+
+  .tag.priority-medium {
+    background: rgba(251, 191, 36, 0.12);
+    color: var(--color-warning);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+  }
+
+  .tag.priority-low {
+    background: rgba(96, 165, 250, 0.12);
+    color: var(--color-info);
+    border: 1px solid rgba(96, 165, 250, 0.3);
+  }
+
+  .tag.daily {
+    background: rgba(167, 139, 250, 0.12);
+    color: var(--color-accent-light);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+  }
+
+  .tag.date {
+    background: rgba(96, 165, 250, 0.08);
+    color: var(--color-info);
+    border: 1px solid rgba(96, 165, 250, 0.2);
+  }
+
+  .tag.date.overdue {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--color-error);
+    border: 1px solid rgba(248, 113, 113, 0.4);
+  }
+
+  .tag.progress {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-text-tertiary);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .todo-actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+
+  .action-btn {
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    font-size: 10px;
-    font-weight: 700;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .action-btn:active {
+    transform: scale(0.92);
+  }
+
+  .action-btn.delete:active {
+    background: rgba(248, 113, 113, 0.15);
+    border-color: rgba(248, 113, 113, 0.3);
+    color: var(--color-error);
+  }
+
+  /* Subtasks */
+  .subtasks {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .subtask-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+  }
+
+  .subtask-text {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
     color: var(--color-text-secondary);
   }
 
-  .filter-pill.active {
-    background: rgba(167, 139, 250, 0.1);
-    color: var(--color-accent-light);
-    border-color: rgba(167, 139, 250, 0.3);
+
+
+  /* Loading State */
+  .loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
   }
 
-  .filter-pill.active .filter-count {
-    background: var(--color-accent);
-    color: #000000;
+  .loading-pulse {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(
+      135deg,
+      rgba(167, 139, 250, 0.3),
+      rgba(167, 139, 250, 0.1)
+    );
+    animation: pulse 1.5s ease-in-out infinite;
   }
 
-  .filter-pill:active {
-    transform: scale(0.97);
+  /* Empty State */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    text-align: center;
+  }
+
+  .empty-icon {
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.08) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    color: var(--color-text-tertiary);
+    margin-bottom: 20px;
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .empty-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+
+  .empty-subtitle {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-tertiary);
+    line-height: 1.5;
+    max-width: 280px;
   }
 
   /* Modal Form */
@@ -805,6 +1097,28 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+  }
+
+  .subtask-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(167, 139, 250, 0.08);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-accent-light);
+  }
+
+  .notice-icon {
+    font-size: 16px;
+    opacity: 0.7;
+  }
+
+  .notice-text {
+    flex: 1;
   }
 
   .form-group {
@@ -850,9 +1164,11 @@
   }
 
   .form-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--color-text-primary);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -865,25 +1181,26 @@
   }
 
   .option-chip {
-    padding: 8px 16px;
-    font-size: 13px;
-    font-weight: 600;
+    padding: 10px 18px;
+    font-size: 12px;
+    font-weight: 700;
     color: var(--color-text-secondary);
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: var(--radius-full);
+    border-radius: 12px;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     gap: 6px;
+    letter-spacing: 0.02em;
   }
 
   .option-chip.active {
     background: var(--color-accent);
     border-color: var(--color-accent);
     color: #000000;
-    box-shadow: 0 0 16px rgba(167, 139, 250, 0.4);
+    box-shadow: 0 0 20px rgba(167, 139, 250, 0.4);
   }
 
   .option-chip.priority-high {
@@ -893,7 +1210,7 @@
   .option-chip.priority-high.active {
     background: var(--color-error);
     border-color: var(--color-error);
-    box-shadow: 0 0 16px rgba(248, 113, 113, 0.4);
+    box-shadow: 0 0 20px rgba(248, 113, 113, 0.4);
   }
 
   .option-chip.priority-medium {
@@ -903,7 +1220,7 @@
   .option-chip.priority-medium.active {
     background: var(--color-warning);
     border-color: var(--color-warning);
-    box-shadow: 0 0 16px rgba(251, 191, 36, 0.4);
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.4);
   }
 
   .option-chip.priority-low {
@@ -913,11 +1230,79 @@
   .option-chip.priority-low.active {
     background: var(--color-info);
     border-color: var(--color-info);
-    box-shadow: 0 0 16px rgba(96, 165, 250, 0.4);
+    box-shadow: 0 0 20px rgba(96, 165, 250, 0.4);
   }
 
   .option-chip:active {
-    transform: scale(0.95);
+    transform: scale(0.96);
+  }
+
+  .date-picker {
+    padding: 10px 18px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    letter-spacing: 0.02em;
+  }
+
+  .date-picker:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 16px rgba(167, 139, 250, 0.3);
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  :global(.submit-btn-full) {
+    flex: 1;
+  }
+
+  /* Confirm Modal */
+  .confirm-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .confirm-content p {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .confirm-actions :global(button) {
+    flex: 1;
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  .option-chip:active {
+    transform: scale(0.96);
   }
 
   .date-picker {
@@ -964,7 +1349,6 @@
   /* Todo Items */
   .todo-wrapper {
     margin-bottom: 8px;
-    transition: all 0.2s ease;
   }
 
   .todo-wrapper.optimistic {
@@ -981,7 +1365,7 @@
     border-radius: 14px;
     transition: all 0.2s ease;
     box-shadow:
-      0 4px 12px rgba(0, 0, 0, 0.4),
+      0 2px 8px rgba(0, 0, 0, 0.4),
       inset 0 1px 0 rgba(255, 255, 255, 0.02);
   }
 
@@ -1031,6 +1415,13 @@
     box-shadow: 0 0 12px rgba(167, 139, 250, 0.3);
   }
 
+  .check-box.partial {
+    background: rgba(167, 139, 250, 0.2);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    box-shadow: 0 0 8px rgba(167, 139, 250, 0.2);
+  }
+
   .todo-check:active .check-box {
     transform: scale(0.92);
   }
@@ -1048,15 +1439,17 @@
     font-size: 15px;
     font-weight: 500;
     color: var(--color-text-primary);
-    line-height: 1.5;
+    line-height: 1.6;
     word-wrap: break-word;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
+    letter-spacing: -0.01em;
   }
 
   .todo-wrapper.completed .todo-text {
     color: var(--color-text-tertiary);
     text-decoration: line-through;
-    opacity: 0.6;
+    opacity: 0.5;
+    transform: scale(0.98);
   }
 
   /* Tags */
@@ -1109,6 +1502,25 @@
     background: rgba(167, 139, 250, 0.08);
     border-color: rgba(167, 139, 250, 0.2);
     color: var(--color-accent-light);
+  }
+
+  .tag-progress {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-tertiary);
+    font-weight: 700;
+  }
+
+  .tag-progress-partial {
+    background: rgba(251, 191, 36, 0.1);
+    border-color: rgba(251, 191, 36, 0.3);
+    color: var(--color-warning);
+  }
+
+  .tag-progress-complete {
+    background: rgba(52, 211, 153, 0.1);
+    border-color: rgba(52, 211, 153, 0.3);
+    color: var(--color-success);
   }
 
   .sync-pulse {
@@ -1308,5 +1720,116 @@
 
   .confirm-actions button {
     flex: 1;
+  }
+
+  /* Subtask Notice in Modal */
+  .subtask-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(167, 139, 250, 0.1);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    border-radius: 8px;
+    margin-bottom: 8px;
+  }
+
+  .notice-icon {
+    font-size: 16px;
+    color: var(--color-accent);
+  }
+
+  .notice-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-accent-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Subtasks */
+  .todo-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .expand-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .expand-btn:active {
+    transform: scale(0.95);
+  }
+
+  .subtask-count {
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .add-subtask-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .add-subtask-btn:active {
+    transform: scale(0.9);
+  }
+
+  .subtasks-container {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .subtask-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+    transition: all 0.2s ease;
+  }
+
+  .subtask-item:active {
+    transform: scale(0.99);
+  }
+
+  .subtask-item .check-box {
+    width: 18px;
+    height: 18px;
+    border-width: 1.5px;
+  }
+
+  .subtask-text {
+    flex: 1;
+    font-size: 14px;
+    color: var(--color-text-secondary);
+  }
+
+  .subtask-item .todo-delete {
+    width: 28px;
+    height: 28px;
   }
 </style>

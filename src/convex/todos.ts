@@ -14,6 +14,9 @@ export const getTodos = query({
       .order("desc")
       .collect();
 
+    // Only get parent-level todos (level 0 or undefined)
+    todos = todos.filter((todo) => !todo.parentId);
+
     // Reset daily tasks if needed
     todos = todos.map((todo) => {
       if (todo.isDaily && todo.isCompleted && todo.lastCompletedAt) {
@@ -83,8 +86,25 @@ export const addTodo = mutation({
     isDaily: v.optional(v.boolean()),
     priority: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
     category: v.optional(v.string()),
+    parentId: v.optional(v.id("todos")),
   },
   handler: async (ctx, args) => {
+    let level = 0;
+    
+    // Determine level based on parent
+    if (args.parentId) {
+      const parent = await ctx.db.get(args.parentId);
+      if (!parent) {
+        throw new Error("Parent todo not found");
+      }
+      level = (parent.level || 0) + 1;
+      
+      // Limit to 2 levels (0, 1, 2)
+      if (level > 2) {
+        throw new Error("Maximum subtask depth reached");
+      }
+    }
+    
     const todoId = await ctx.db.insert("todos", {
       text: args.text,
       isCompleted: false,
@@ -93,8 +113,26 @@ export const addTodo = mutation({
       isDaily: args.isDaily,
       priority: args.priority,
       category: args.category,
+      parentId: args.parentId,
+      level,
     });
     return todoId;
+  },
+});
+
+// Get subtasks for a todo
+export const getSubtasks = query({
+  args: {
+    parentId: v.id("todos"),
+  },
+  handler: async (ctx, args) => {
+    const subtasks = await ctx.db
+      .query("todos")
+      .withIndex("by_parent", (q) => q.eq("parentId", args.parentId))
+      .order("desc")
+      .collect();
+    
+    return subtasks;
   },
 });
 
@@ -160,6 +198,25 @@ export const updatePriority = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, {
+      priority: args.priority,
+    });
+  },
+});
+
+// Update todo (for editing)
+export const updateTodo = mutation({
+  args: {
+    id: v.id("todos"),
+    text: v.string(),
+    dueDate: v.optional(v.number()),
+    isDaily: v.boolean(),
+    priority: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      text: args.text,
+      dueDate: args.dueDate,
+      isDaily: args.isDaily,
       priority: args.priority,
     });
   },

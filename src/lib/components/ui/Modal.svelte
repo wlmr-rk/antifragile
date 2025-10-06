@@ -23,8 +23,10 @@
     <div 
       class="modal-content" 
       onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
     >
       <div class="modal-header">
         {#if title}

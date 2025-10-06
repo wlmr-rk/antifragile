@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Check } from "@lucide/svelte";
+  import { Check, Minus } from "@lucide/svelte";
   
   interface Props {
     checked?: boolean;
+    partial?: boolean;
     color?: string;
     glowColor?: string;
     onclick?: () => void;
@@ -11,6 +12,7 @@
   
   let {
     checked = false,
+    partial = false,
     color = "var(--color-accent)",
     glowColor = "rgba(167, 139, 250, 0.4)",
     onclick,
@@ -21,16 +23,19 @@
 <button
   class="checkbox"
   class:checked
+  class:partial
   class:disabled
   {onclick}
   {disabled}
-  aria-checked={checked}
+  aria-checked={checked ? "true" : partial ? "mixed" : "false"}
   role="checkbox"
   type="button"
   style="--checkbox-color: {color}; --checkbox-glow: {glowColor};"
 >
   {#if checked}
     <Check size={14} strokeWidth={3} />
+  {:else if partial}
+    <Minus size={14} strokeWidth={3} />
   {/if}
 </button>
 
@@ -64,6 +69,13 @@
     background: var(--checkbox-color);
     color: #000000;
     box-shadow: 0 0 16px var(--checkbox-glow), 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  .checkbox.partial {
+    border-color: var(--color-warning);
+    background: var(--color-warning);
+    color: #000000;
+    box-shadow: 0 0 16px rgba(251, 191, 36, 0.4), 0 2px 8px rgba(0, 0, 0, 0.4);
   }
 
   .checkbox.disabled {

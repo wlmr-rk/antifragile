@@ -150,20 +150,7 @@
 </script>
 
 <div class="page">
-  <!-- Total Count Header -->
-  {#if matrixSummary.data}
-    <div class="focus-header">
-      <div class="header-icon">
-        <Grid3x3 size={18} strokeWidth={2.5} />
-      </div>
-      <div class="header-text">
-        <div class="header-count">{matrixSummary.data.totalActive}</div>
-        <div class="header-label">Active Tasks</div>
-      </div>
-    </div>
-  {/if}
-
-  <!-- Matrix Grid -->
+  <!-- Full Screen Matrix Grid -->
   <div class="matrix-grid">
     {#each quadrants as quadrant (quadrant.id)}
       {@const tasks = getQuadrantTasks(quadrant.id)}
@@ -351,45 +338,9 @@
 <style>
   .page {
     background: var(--color-bg-primary);
-    padding: 16px;
-    padding-bottom: 24px;
-  }
-
-  /* Focus Header */
-  .focus-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-
-  .header-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    background: rgba(167, 139, 250, 0.1);
-    border: 1px solid rgba(167, 139, 250, 0.3);
-    border-radius: 10px;
-    color: var(--color-accent);
-  }
-
-  .header-text {
-    flex: 1;
-  }
-
-  .header-count {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--color-text-primary);
-    line-height: 1;
-  }
-
-  .header-label {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    margin-top: 2px;
+    height: 100%;
+    overflow: hidden;
+    padding: 8px;
   }
 
   .summary-stats {
@@ -402,21 +353,23 @@
     font-weight: 700;
   }
 
-  /* Matrix Grid */
+  /* Matrix Grid - Full Screen */
   .matrix-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    grid-template-rows: repeat(2, 1fr);
+    gap: 8px;
+    height: 100%;
   }
 
   .quadrant-card {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 14px;
-    padding: 14px;
+    border-radius: 12px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    min-height: 180px;
+    overflow: hidden;
     box-shadow:
       0 4px 12px rgba(0, 0, 0, 0.4),
       inset 0 1px 0 rgba(255, 255, 255, 0.02);
@@ -425,17 +378,17 @@
   /* Quadrant Header */
   .quadrant-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
-    padding-bottom: 10px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
     border-bottom: 1px solid var(--color-border-subtle);
   }
 
   .quadrant-title-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex: 1;
   }
 
@@ -443,48 +396,50 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     background: rgba(255, 255, 255, 0.03);
-    border-radius: 8px;
+    border-radius: 6px;
   }
 
   .quadrant-info {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex: 1;
   }
 
   .quadrant-title {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--color-text-primary);
     line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
   .quadrant-count {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 700;
     line-height: 1;
   }
 
   .add-task-btn {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 8px;
+    border-radius: 6px;
     color: var(--color-text-tertiary);
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .add-task-btn:active {
-    transform: scale(0.92);
+    transform: scale(0.9);
     background: rgba(255, 255, 255, 0.04);
   }
 
@@ -493,14 +448,16 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
     overflow-y: auto;
-    max-height: 300px;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0;
   }
 
   .empty-quadrant {
     text-align: center;
-    padding: 20px;
+    padding: 16px 8px;
     color: var(--color-text-tertiary);
   }
 
@@ -512,11 +469,15 @@
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    padding: 10px;
-    background: var(--color-surface-1);
-    border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-md);
-    transition: all var(--transition-fast);
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .task-item:active {
+    transform: scale(0.98);
   }
 
   .task-checkbox {
