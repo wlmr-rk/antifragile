@@ -8,6 +8,19 @@
   const { children } = $props();
 
   setupConvex(PUBLIC_CONVEX_URL);
+
+  // Register service worker for PWA
+  if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then((registration) => {
+          console.log('Service Worker registered:', registration);
+        })
+        .catch((error) => {
+          console.log('Service Worker registration failed:', error);
+        });
+    });
+  }
 </script>
 
 <svelte:head>
@@ -21,6 +34,18 @@
     name="apple-mobile-web-app-status-bar-style"
     content="black-translucent"
   />
+  <meta name="apple-mobile-web-app-title" content="Antifragile" />
+  <meta name="description" content="Cyberpunk productivity app for todos, habits, fitness, and focus" />
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json" />
+  
+  <!-- Icons -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  
   <title>Antifragile - Productivity</title>
 </svelte:head>
 

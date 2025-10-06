@@ -400,52 +400,22 @@
             <Target size={14} strokeWidth={2.5} />
             <span>Focus</span>
           </div>
-          <div class="donut-container">
-            <svg viewBox="0 0 100 100" class="donut-chart">
-              <circle cx="50" cy="50" r={radius} fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="16"/>
-              <circle cx="50" cy="50" r={radius} fill="none" stroke="#f87171" stroke-width="16" 
-                      stroke-dasharray="{urgent} {circumference}" 
-                      stroke-dashoffset="0" 
-                      transform="rotate(-90 50 50)" 
-                      class="donut-segment"
-                      style="filter: drop-shadow(0 0 8px rgba(248, 113, 113, 0.4));"/>
-              <circle cx="50" cy="50" r={radius} fill="none" stroke="#60a5fa" stroke-width="16" 
-                      stroke-dasharray="{important} {circumference}" 
-                      stroke-dashoffset="{-urgent}" 
-                      transform="rotate(-90 50 50)" 
-                      class="donut-segment"
-                      style="filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.4));"/>
-              <circle cx="50" cy="50" r={radius} fill="none" stroke="#fbbf24" stroke-width="16" 
-                      stroke-dasharray="{delegate} {circumference}" 
-                      stroke-dashoffset="{-(urgent + important)}" 
-                      transform="rotate(-90 50 50)" 
-                      class="donut-segment"
-                      style="filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.4));"/>
-              <circle cx="50" cy="50" r={radius} fill="none" stroke="#9ca3af" stroke-width="16" 
-                      stroke-dasharray="{eliminate} {circumference}" 
-                      stroke-dashoffset="{-(urgent + important + delegate)}" 
-                      transform="rotate(-90 50 50)" 
-                      class="donut-segment"
-                      style="filter: drop-shadow(0 0 6px rgba(156, 163, 175, 0.3));"/>
-              <text x="50" y="50" text-anchor="middle" dy="0.35em" class="donut-total">{total}</text>
-            </svg>
-          </div>
-          <div class="donut-legend">
-            <div class="legend-row">
-              <span class="legend-dot" style="background: #f87171; box-shadow: 0 0 8px rgba(248, 113, 113, 0.4);"></span>
-              <span>{matrixSummary.data.urgentImportant.total}</span>
+          <div class="mini-matrix">
+            <div class="mini-quadrant urgent-important">
+              <div class="mini-count">{matrixSummary.data.urgentImportant.total}</div>
+              <div class="mini-label">Do</div>
             </div>
-            <div class="legend-row">
-              <span class="legend-dot" style="background: #60a5fa; box-shadow: 0 0 8px rgba(96, 165, 250, 0.4);"></span>
-              <span>{matrixSummary.data.notUrgentImportant.total}</span>
+            <div class="mini-quadrant not-urgent-important">
+              <div class="mini-count">{matrixSummary.data.notUrgentImportant.total}</div>
+              <div class="mini-label">Plan</div>
             </div>
-            <div class="legend-row">
-              <span class="legend-dot" style="background: #fbbf24; box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);"></span>
-              <span>{matrixSummary.data.urgentNotImportant.total}</span>
+            <div class="mini-quadrant urgent-not-important">
+              <div class="mini-count">{matrixSummary.data.urgentNotImportant.total}</div>
+              <div class="mini-label">Delegate</div>
             </div>
-            <div class="legend-row">
-              <span class="legend-dot" style="background: #9ca3af;"></span>
-              <span>{matrixSummary.data.notUrgentNotImportant.total}</span>
+            <div class="mini-quadrant not-urgent-not-important">
+              <div class="mini-count">{matrixSummary.data.notUrgentNotImportant.total}</div>
+              <div class="mini-label">Delete</div>
             </div>
           </div>
         </a>
@@ -455,14 +425,11 @@
             <Target size={14} strokeWidth={2.5} />
             <span>Focus</span>
           </div>
-          <div class="donut-container">
-            <div class="skeleton-donut"></div>
-          </div>
-          <div class="skeleton-bars">
-            <div class="skeleton-bar"></div>
-            <div class="skeleton-bar"></div>
-            <div class="skeleton-bar"></div>
-            <div class="skeleton-bar"></div>
+          <div class="mini-matrix">
+            <div class="mini-quadrant skeleton-quad"></div>
+            <div class="mini-quadrant skeleton-quad"></div>
+            <div class="mini-quadrant skeleton-quad"></div>
+            <div class="mini-quadrant skeleton-quad"></div>
           </div>
         </a>
       {/if}
@@ -1089,20 +1056,83 @@
     transform: scale(0.98);
   }
 
-  .donut-container {
+  /* Mini Eisenhower Matrix */
+  .mini-matrix {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .mini-quadrant {
+    aspect-ratio: 1;
     display: flex;
+    flex-direction: column;
+    align-items: center;
     justify-content: center;
-    margin-bottom: 12px;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    transition: all 0.3s ease;
   }
 
-  .donut-chart {
-    width: 90px;
-    height: 90px;
+  .mini-quadrant.urgent-important {
+    border-color: rgba(248, 113, 113, 0.3);
+    background: rgba(248, 113, 113, 0.05);
   }
 
-  .donut-segment {
-    transition: stroke-dasharray 1.2s cubic-bezier(0.4, 0, 0.2, 1);
-    animation: fadeIn 0.6s ease-out;
+  .mini-quadrant.not-urgent-important {
+    border-color: rgba(96, 165, 250, 0.3);
+    background: rgba(96, 165, 250, 0.05);
+  }
+
+  .mini-quadrant.urgent-not-important {
+    border-color: rgba(251, 191, 36, 0.3);
+    background: rgba(251, 191, 36, 0.05);
+  }
+
+  .mini-quadrant.not-urgent-not-important {
+    border-color: rgba(156, 163, 175, 0.2);
+    background: rgba(156, 163, 175, 0.03);
+  }
+
+  .mini-count {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1;
+  }
+
+  .mini-label {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .skeleton-quad {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  .skeleton-quad:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+
+  .skeleton-quad:nth-child(3) {
+    animation-delay: 0.2s;
+  }
+
+  .skeleton-quad:nth-child(4) {
+    animation-delay: 0.3s;
   }
 
   /* Skeleton Loaders */
@@ -1185,33 +1215,7 @@
     }
   }
 
-  .donut-total {
-    font-size: 22px;
-    font-weight: 700;
-    fill: var(--color-text-primary);
-  }
 
-  .donut-legend {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-  }
-
-  .legend-row {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--color-text-secondary);
-  }
-
-  .legend-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
 
   /* Insights Panel */
   .insights-panel {
