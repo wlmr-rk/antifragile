@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { AlertCircle, Calendar, Flame, Grid3x3, Plus, Trash2, Users } from "@lucide/svelte";
+  import {
+    AlertCircle,
+    Calendar,
+    Flame,
+    Grid3x3,
+    Plus,
+    Trash2,
+    Users,
+  } from "@lucide/svelte";
   import { useConvexClient, useQuery } from "convex-svelte";
   import { api } from "../../convex/_generated/api";
   import type { Id } from "../../convex/_generated/dataModel";
@@ -30,37 +38,41 @@
       id: "urgent-important" as Quadrant,
       title: "Do First",
       subtitle: "Urgent + Important",
-      color: "#ef4444",
-      bgColor: "rgba(239, 68, 68, 0.08)",
-      borderColor: "rgba(239, 68, 68, 0.3)",
+      color: "#f87171",
+      bgColor: "rgba(248, 113, 113, 0.08)",
+      borderColor: "rgba(248, 113, 113, 0.25)",
+      glowColor: "rgba(248, 113, 113, 0.3)",
       icon: Flame,
     },
     {
       id: "not-urgent-important" as Quadrant,
       title: "Schedule",
       subtitle: "Important",
-      color: "#3b82f6",
-      bgColor: "rgba(59, 130, 246, 0.08)",
-      borderColor: "rgba(59, 130, 246, 0.3)",
+      color: "#60a5fa",
+      bgColor: "rgba(96, 165, 250, 0.08)",
+      borderColor: "rgba(96, 165, 250, 0.25)",
+      glowColor: "rgba(96, 165, 250, 0.3)",
       icon: Calendar,
     },
     {
       id: "urgent-not-important" as Quadrant,
       title: "Delegate",
       subtitle: "Urgent",
-      color: "#f59e0b",
-      bgColor: "rgba(245, 158, 11, 0.08)",
-      borderColor: "rgba(245, 158, 11, 0.3)",
+      color: "#fbbf24",
+      bgColor: "rgba(251, 191, 36, 0.08)",
+      borderColor: "rgba(251, 191, 36, 0.25)",
+      glowColor: "rgba(251, 191, 36, 0.3)",
       icon: Users,
     },
     {
       id: "not-urgent-not-important" as Quadrant,
       title: "Eliminate",
       subtitle: "Neither",
-      color: "#6b7280",
-      bgColor: "rgba(107, 114, 128, 0.08)",
-      borderColor: "rgba(107, 114, 128, 0.3)",
-      icon: AlertCircle,
+      color: "#9ca3af",
+      bgColor: "rgba(156, 163, 175, 0.05)",
+      borderColor: "rgba(156, 163, 175, 0.15)",
+      glowColor: "rgba(156, 163, 175, 0.2)",
+      icon: Grid3x3,
     },
   ];
 
@@ -150,16 +162,16 @@
           <div class="summary-label">Active Tasks</div>
         </div>
         <div class="summary-stats">
-          <div class="stat-mini" style="color: #ef4444;">
+          <div class="stat-mini" style="color: #f87171;">
             {matrixSummary.data.urgentImportant.total}
           </div>
-          <div class="stat-mini" style="color: #3b82f6;">
+          <div class="stat-mini" style="color: #60a5fa;">
             {matrixSummary.data.notUrgentImportant.total}
           </div>
-          <div class="stat-mini" style="color: #f59e0b;">
+          <div class="stat-mini" style="color: #fbbf24;">
             {matrixSummary.data.urgentNotImportant.total}
           </div>
-          <div class="stat-mini" style="color: #6b7280;">
+          <div class="stat-mini" style="color: #9ca3af;">
             {matrixSummary.data.notUrgentNotImportant.total}
           </div>
         </div>
@@ -173,7 +185,7 @@
       {@const tasks = getQuadrantTasks(quadrant.id)}
       <div
         class="quadrant-card card"
-        style="background: {quadrant.bgColor}; border-color: {quadrant.borderColor};"
+        style="background: {quadrant.bgColor}; border-color: {quadrant.borderColor}; box-shadow: 0 0 20px {quadrant.glowColor}, 0 4px 12px rgba(0, 0, 0, 0.6);"
       >
         <!-- Quadrant Header -->
         <div class="quadrant-header">
@@ -275,7 +287,11 @@
           <div class="modal-title-group">
             <div class="modal-icon" style="color: {quadrant?.color};">
               {#if quadrant?.icon}
-                <svelte:component this={quadrant.icon} size={28} strokeWidth={2} />
+                <svelte:component
+                  this={quadrant.icon}
+                  size={28}
+                  strokeWidth={2}
+                />
               {/if}
             </div>
             <div>
@@ -351,12 +367,9 @@
 
 <style>
   .page {
-    min-height: 100vh;
     background: var(--color-bg-primary);
     padding: 20px;
-    padding-bottom: calc(
-      var(--spacing-bottom-nav) + env(safe-area-inset-bottom, 0px) + 24px
-    );
+    padding-bottom: 24px;
   }
 
   /* Summary Card */
@@ -377,8 +390,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(139, 92, 246, 0.15);
+    background: rgba(167, 139, 250, 0.15);
     border-radius: var(--radius-md);
+    box-shadow: 0 0 16px rgba(167, 139, 250, 0.3);
   }
 
   .summary-content {
@@ -563,9 +577,10 @@
   }
 
   .task-delete:active {
-    background: rgba(239, 68, 68, 0.1);
+    background: rgba(248, 113, 113, 0.15);
     color: var(--color-error);
     transform: scale(0.9);
+    box-shadow: 0 0 12px rgba(248, 113, 113, 0.3);
   }
 
   /* Quadrant Footer */
@@ -697,7 +712,9 @@
   .form-textarea:focus {
     border-color: var(--color-accent);
     background: var(--color-surface-2);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    box-shadow:
+      0 0 0 3px rgba(167, 139, 250, 0.15),
+      0 0 16px rgba(167, 139, 250, 0.2);
   }
 
   .modal-actions {

@@ -1,11 +1,25 @@
 <script lang="ts">
-  import { Calendar, CheckCircle, ChevronDown, ListTodo, Plus, Repeat } from "@lucide/svelte";
+  import {
+    Calendar,
+    CheckCircle,
+    ListTodo,
+    Repeat,
+    Trash2,
+  } from "@lucide/svelte";
   import { useConvexClient, useQuery } from "convex-svelte";
   import { api } from "../../convex/_generated/api";
   import type { Id } from "../../convex/_generated/dataModel";
+  import {
+    Button,
+    Checkbox,
+    Input,
+    Textarea,
+    FloatingActionButton,
+    Modal,
+  } from "$lib/components/ui";
 
   let newTodoText = $state("");
-  let showAddOptions = $state(false);
+  let showAddModal = $state(false);
   let selectedDueDate = $state<number | undefined>(undefined);
   let isDaily = $state(false);
   let selectedPriority = $state<"low" | "medium" | "high" | undefined>(
@@ -81,7 +95,14 @@
     if (!trimmedText) return;
 
     const text = trimmedText;
-    const dueDate = selectedDueDate;
+    // Default to today if no due date selected
+    const dueDate =
+      selectedDueDate ||
+      (() => {
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        return today.getTime();
+      })();
     const daily = isDaily;
     const priority = selectedPriority;
     const optimisticId = `optimistic-${Date.now()}-${Math.random()}`;
@@ -100,7 +121,7 @@
 
     optimisticAdds = [optimisticTodo, ...optimisticAdds];
     newTodoText = "";
-    showAddOptions = false;
+    showAddModal = false;
     selectedDueDate = undefined;
     isDaily = false;
     selectedPriority = undefined;
@@ -201,184 +222,34 @@
 </script>
 
 <div class="page">
-  <!-- Filters -->
-  <div class="filters">
-    <button
-      class="filter-btn {filter === 'all' ? 'active' : ''}"
-      onclick={() => (filter = "all")}
-    >
-      All
-    </button>
-    <button
-      class="filter-btn {filter === 'active' ? 'active' : ''}"
-      onclick={() => (filter = "active")}
-    >
-      Active
-    </button>
-    <button
-      class="filter-btn {filter === 'daily' ? 'active' : ''}"
-      onclick={() => (filter = "daily")}
-    >
-      Daily
-    </button>
-    <button
-      class="filter-btn {filter === 'completed' ? 'active' : ''}"
-      onclick={() => (filter = "completed")}
-    >
-      Done
-    </button>
-  </div>
-
-  <!-- Add Todo Section -->
-  <div class="add-section">
-    <form onsubmit={handleAddTodo} class="add-form">
-      <input
-        type="text"
-        bind:value={newTodoText}
-        placeholder="Add a task..."
-        class="add-input"
-        autocomplete="off"
-      />
+  <!-- Minimal Header with Filters -->
+  <div class="header">
+    <div class="filters">
       <button
-        type="button"
-        class="options-btn"
-        aria-label="Show add task options"
-        onclick={() => (showAddOptions = !showAddOptions)}
+        class="filter-chip {filter === 'all' ? 'active' : ''}"
+        onclick={() => (filter = "all")}
       >
-        <ChevronDown
-          size={20}
-          style="transform: rotate({showAddOptions
-            ? '180deg'
-            : '0'}); transition: transform 0.2s;"
-        />
+        All
       </button>
       <button
-        type="submit"
-        class="add-btn"
-        aria-label="Add task"
-        disabled={!newTodoText.trim()}
+        class="filter-chip {filter === 'active' ? 'active' : ''}"
+        onclick={() => (filter = "active")}
       >
-        <Plus size={22} strokeWidth={2.5} />
+        Active
       </button>
-    </form>
-
-    {#if showAddOptions}
-      <div class="options-panel animate-slide-down">
-        <!-- Due Date -->
-        <div class="option-group">
-          <label class="option-label" id="due-date-label">Due Date</label>
-          <div
-            class="option-buttons"
-            role="group"
-            aria-labelledby="due-date-label"
-          >
-            <button
-              type="button"
-              class="option-chip {selectedDueDate &&
-              formatDueDate(selectedDueDate) === 'Today'
-                ? 'active'
-                : ''}"
-              onclick={() => setDueDatePreset(0)}
-            >
-              <Calendar size={14} />
-              Today
-            </button>
-            <button
-              type="button"
-              class="option-chip {selectedDueDate &&
-              formatDueDate(selectedDueDate) === 'Tomorrow'
-                ? 'active'
-                : ''}"
-              onclick={() => setDueDatePreset(1)}
-            >
-              Tomorrow
-            </button>
-            <button
-              type="button"
-              class="option-chip {selectedDueDate &&
-              formatDueDate(selectedDueDate).includes('7')
-                ? 'active'
-                : ''}"
-              onclick={() => setDueDatePreset(7)}
-            >
-              Next Week
-            </button>
-            {#if selectedDueDate}
-              <button
-                type="button"
-                class="option-chip"
-                onclick={() => (selectedDueDate = undefined)}
-              >
-                Clear
-              </button>
-            {/if}
-          </div>
-        </div>
-
-        <!-- Daily Toggle -->
-        <div class="option-group">
-          <label class="option-label" for="daily-toggle">
-            <Repeat size={14} />
-            Daily Task
-          </label>
-          <button
-            type="button"
-            id="daily-toggle"
-            role="switch"
-            aria-checked={isDaily}
-            class="toggle-btn {isDaily ? 'active' : ''}"
-            onclick={() => (isDaily = !isDaily)}
-          >
-            <div class="toggle-track">
-              <div class="toggle-thumb"></div>
-            </div>
-          </button>
-        </div>
-
-        <!-- Priority -->
-        <div class="option-group">
-          <label class="option-label" id="priority-label">Priority</label>
-          <div
-            class="option-buttons"
-            role="group"
-            aria-labelledby="priority-label"
-          >
-            <button
-              type="button"
-              class="option-chip {selectedPriority === 'high' ? 'active' : ''}"
-              onclick={() =>
-                (selectedPriority =
-                  selectedPriority === "high" ? undefined : "high")}
-              style="border-color: var(--color-error);"
-            >
-              High
-            </button>
-            <button
-              type="button"
-              class="option-chip {selectedPriority === 'medium'
-                ? 'active'
-                : ''}"
-              onclick={() =>
-                (selectedPriority =
-                  selectedPriority === "medium" ? undefined : "medium")}
-              style="border-color: var(--color-warning);"
-            >
-              Medium
-            </button>
-            <button
-              type="button"
-              class="option-chip {selectedPriority === 'low' ? 'active' : ''}"
-              onclick={() =>
-                (selectedPriority =
-                  selectedPriority === "low" ? undefined : "low")}
-              style="border-color: var(--color-info);"
-            >
-              Low
-            </button>
-          </div>
-        </div>
-      </div>
-    {/if}
+      <button
+        class="filter-chip {filter === 'daily' ? 'active' : ''}"
+        onclick={() => (filter = "daily")}
+      >
+        Daily
+      </button>
+      <button
+        class="filter-chip {filter === 'completed' ? 'active' : ''}"
+        onclick={() => (filter = "completed")}
+      >
+        Done
+      </button>
+    </div>
   </div>
 
   <!-- Todo List -->
@@ -430,32 +301,11 @@
             : ''} {todo.isOptimistic ? 'optimistic' : ''} gesture-press"
           class:overdue={!todo.isCompleted && isOverdue(todo.dueDate)}
         >
-          <button
-            class="todo-checkbox"
+          <Checkbox
+            checked={todo.isCompleted}
             onclick={() => handleToggleTodo(todo._id)}
             disabled={todo.isOptimistic}
-            aria-label="Toggle todo"
-          >
-            <div class="checkbox-inner">
-              {#if todo.isCompleted}
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M2 7L5.5 10.5L12 3.5"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-              {/if}
-            </div>
-          </button>
+          />
 
           <div class="todo-content">
             <div class="todo-text">{todo.text}</div>
@@ -501,159 +351,252 @@
             disabled={todo.isOptimistic}
             aria-label="Delete todo"
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 18 18"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M4.5 4.5L13.5 13.5M4.5 13.5L13.5 4.5"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-            </svg>
+            <Trash2 size={16} />
           </button>
         </div>
       {/each}
     {/if}
   </div>
+
+  <!-- Floating Action Button -->
+  <FloatingActionButton
+    onclick={() => (showAddModal = true)}
+    label="Add task"
+  />
+
+  <!-- Add Task Modal -->
+  <Modal
+    open={showAddModal}
+    onClose={() => (showAddModal = false)}
+    title="New Task"
+  >
+    <form onsubmit={handleAddTodo} class="add-modal-form">
+      <!-- Task Input with Daily Toggle -->
+      <div class="form-group">
+        <div class="input-with-toggle">
+          <Input
+            bind:value={newTodoText}
+            placeholder="What needs to be done?"
+            id="task-input"
+            class="task-input-field"
+          />
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isDaily}
+            aria-label="Daily task"
+            class="toggle-btn-inline {isDaily ? 'active' : ''}"
+            onclick={() => (isDaily = !isDaily)}
+            title="Daily Task"
+          >
+            <Repeat size={18} strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+
+      <!-- Due Date -->
+      <div class="form-group">
+        <label class="form-label">Due Date</label>
+        <div class="option-buttons">
+          <button
+            type="button"
+            class="option-chip {!selectedDueDate ||
+            formatDueDate(selectedDueDate) === 'Today'
+              ? 'active'
+              : ''}"
+            onclick={() => setDueDatePreset(0)}
+          >
+            <Calendar size={14} />
+            Today
+          </button>
+          <button
+            type="button"
+            class="option-chip {selectedDueDate &&
+            formatDueDate(selectedDueDate) === 'Tomorrow'
+              ? 'active'
+              : ''}"
+            onclick={() => setDueDatePreset(1)}
+          >
+            Tomorrow
+          </button>
+          <input
+            type="date"
+            class="date-picker"
+            onchange={(e) => {
+              const date = new Date(e.currentTarget.value);
+              date.setHours(23, 59, 59, 999);
+              selectedDueDate = date.getTime();
+            }}
+          />
+        </div>
+      </div>
+
+      <!-- Priority -->
+      <div class="form-group">
+        <label class="form-label">Priority</label>
+        <div class="option-buttons">
+          <button
+            type="button"
+            class="option-chip priority-high {selectedPriority === 'high'
+              ? 'active'
+              : ''}"
+            onclick={() =>
+              (selectedPriority =
+                selectedPriority === "high" ? undefined : "high")}
+          >
+            High
+          </button>
+          <button
+            type="button"
+            class="option-chip priority-medium {selectedPriority === 'medium'
+              ? 'active'
+              : ''}"
+            onclick={() =>
+              (selectedPriority =
+                selectedPriority === "medium" ? undefined : "medium")}
+          >
+            Medium
+          </button>
+          <button
+            type="button"
+            class="option-chip priority-low {selectedPriority === 'low'
+              ? 'active'
+              : ''}"
+            onclick={() =>
+              (selectedPriority =
+                selectedPriority === "low" ? undefined : "low")}
+          >
+            Low
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={!newTodoText.trim()}
+          class="submit-btn-full"
+        >
+          Add Task
+        </Button>
+      </div>
+    </form>
+  </Modal>
 </div>
 
 <style>
   .page {
-    min-height: 100vh;
     background: var(--color-bg-primary);
+    padding: 16px;
+    padding-bottom: 100px;
+  }
+
+  /* Header */
+  .header {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .page-title {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--color-text-primary);
+    margin: 0 0 16px 0;
+    letter-spacing: -0.02em;
   }
 
   .filters {
     display: flex;
     gap: 8px;
-    padding: 16px 20px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
 
   .filters::-webkit-scrollbar {
     display: none;
   }
 
-  .filter-btn {
+  .filter-chip {
     padding: 8px 16px;
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 13px;
+    font-weight: 600;
     color: var(--color-text-secondary);
-    background: var(--color-surface-1);
-    border: 1px solid var(--color-border-medium);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--radius-full);
     cursor: pointer;
     transition: all var(--transition-fast);
     white-space: nowrap;
   }
 
-  .filter-btn.active {
+  .filter-chip.active {
     background: var(--color-accent);
-    color: white;
+    color: #000000;
     border-color: var(--color-accent);
-    box-shadow: var(--glow-accent);
+    box-shadow:
+      0 0 20px rgba(167, 139, 250, 0.4),
+      0 4px 12px rgba(0, 0, 0, 0.4);
   }
 
-  .filter-btn:active {
+  .filter-chip:active {
     transform: scale(0.95);
   }
 
-  .add-section {
-    padding: 0 20px 16px;
-    background: var(--color-bg-secondary);
-    border-bottom: 1px solid var(--color-border-subtle);
+  /* Modal Form */
+  .add-modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
-  .add-form {
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .input-with-toggle {
     display: flex;
     gap: 8px;
     align-items: center;
   }
 
-  .add-input {
+  :global(.task-input-field) {
     flex: 1;
-    padding: 12px 16px;
-    font-size: 15px;
-    background: var(--color-surface-1);
-    color: var(--color-text-primary);
-    border: 1px solid var(--color-border-medium);
-    border-radius: var(--radius-md);
-    outline: none;
-    transition: all var(--transition-fast);
   }
 
-  .add-input:focus {
-    border-color: var(--color-accent);
-    background: var(--color-surface-2);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-  }
-
-  .add-input::placeholder {
-    color: var(--color-text-tertiary);
-  }
-
-  .options-btn,
-  .add-btn {
+  .toggle-btn-inline {
     flex-shrink: 0;
     width: 44px;
     height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--color-border-medium);
-    background: var(--color-surface-1);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
     color: var(--color-text-secondary);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: all 0.2s ease;
   }
 
-  .add-btn {
+  .toggle-btn-inline.active {
     background: var(--color-accent);
-
     border-color: var(--color-accent);
-    color: white;
+    color: #000000;
+    box-shadow: 0 0 16px rgba(167, 139, 250, 0.4);
   }
 
-  .add-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  .add-btn:active:not(:disabled) {
+  .toggle-btn-inline:active {
     transform: scale(0.95);
   }
 
-  .options-panel {
-    margin-top: 16px;
-    padding: 16px;
-    background: var(--color-surface-1);
-    border: 1px solid var(--color-border-medium);
-    border-radius: var(--radius-lg);
-  }
-
-  .option-group {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-
-  .option-group:last-child {
-    margin-bottom: 0;
-  }
-
-  .option-label {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--color-text-secondary);
+  .form-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-primary);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -663,65 +606,99 @@
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
-    justify-content: flex-end;
   }
 
   .option-chip {
-    padding: 6px 12px;
+    padding: 8px 16px;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--color-text-secondary);
-    background: var(--color-surface-2);
-    border: 1px solid var(--color-border-medium);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: var(--radius-full);
     cursor: pointer;
     transition: all var(--transition-fast);
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
   }
 
   .option-chip.active {
     background: var(--color-accent);
     border-color: var(--color-accent);
-    color: white;
+    color: #000000;
+    box-shadow: 0 0 16px rgba(167, 139, 250, 0.4);
   }
 
-  .toggle-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px;
+  .option-chip.priority-high {
+    border-color: rgba(248, 113, 113, 0.3);
   }
 
-  .toggle-track {
-    width: 48px;
-    height: 28px;
-    background: var(--color-surface-2);
-    border: 2px solid var(--color-border-medium);
+  .option-chip.priority-high.active {
+    background: var(--color-error);
+    border-color: var(--color-error);
+    box-shadow: 0 0 16px rgba(248, 113, 113, 0.4);
+  }
+
+  .option-chip.priority-medium {
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+
+  .option-chip.priority-medium.active {
+    background: var(--color-warning);
+    border-color: var(--color-warning);
+    box-shadow: 0 0 16px rgba(251, 191, 36, 0.4);
+  }
+
+  .option-chip.priority-low {
+    border-color: rgba(96, 165, 250, 0.3);
+  }
+
+  .option-chip.priority-low.active {
+    background: var(--color-info);
+    border-color: var(--color-info);
+    box-shadow: 0 0 16px rgba(96, 165, 250, 0.4);
+  }
+
+  .option-chip:active {
+    transform: scale(0.95);
+  }
+
+  .date-picker {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: var(--radius-full);
-    position: relative;
-    transition: all var(--transition-fast);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color-scheme: dark;
   }
 
-  .toggle-btn.active .toggle-track {
-    background: var(--color-accent);
+  .date-picker::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+  }
+
+  .date-picker:focus {
+    outline: none;
     border-color: var(--color-accent);
+    box-shadow: 0 0 16px rgba(167, 139, 250, 0.3);
   }
 
-  .toggle-thumb {
-    width: 20px;
-    height: 20px;
-    background: var(--color-text-primary);
-    border-radius: 50%;
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    transition: transform var(--transition-fast);
+  .modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
-  .toggle-btn.active .toggle-thumb {
-    transform: translateX(20px);
+  :global(.submit-btn-full) {
+    flex: 1;
   }
 
   .todo-list {
@@ -731,50 +708,28 @@
   .todo-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px;
-    margin-bottom: 8px;
-    background: var(--color-surface-1);
-    border: 1px solid var(--color-border-medium);
-    border-radius: var(--radius-lg);
+    gap: 14px;
+    padding: 16px;
+    margin-bottom: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
     transition: all var(--transition-fast);
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .todo-item.optimistic {
-    opacity: 0.7;
+    opacity: 0.6;
   }
 
   .todo-item.overdue {
-    border-color: rgba(239, 68, 68, 0.3);
-    background: rgba(239, 68, 68, 0.05);
-  }
-
-  .todo-checkbox {
-    flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-  }
-
-  .checkbox-inner {
-    width: 24px;
-    height: 24px;
-    border: 2px solid var(--color-border-strong);
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--transition-fast);
-    color: transparent;
-  }
-
-  .todo-item.completed .checkbox-inner {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    color: white;
+    border-color: rgba(248, 113, 113, 0.3);
+    background: rgba(248, 113, 113, 0.05);
+    box-shadow:
+      0 0 16px rgba(248, 113, 113, 0.2),
+      0 4px 12px rgba(0, 0, 0, 0.6);
   }
 
   .todo-content {

@@ -34,25 +34,20 @@
 
 <style>
   .app-container {
-    min-height: 100vh;
-    min-height: -webkit-fill-available;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-rows: 1fr auto;
     background-color: var(--color-bg-primary);
-    display: flex;
-    flex-direction: column;
   }
 
   .main-content {
-    flex: 1;
-    padding-bottom: calc(
-      var(--spacing-bottom-nav) + env(safe-area-inset-bottom, 0px) + 16px
-    );
-    overflow-x: hidden;
     overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Prevent pull-to-refresh on iOS when not intended */
-  .main-content {
+    overflow-x: hidden;
     overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
 </style>

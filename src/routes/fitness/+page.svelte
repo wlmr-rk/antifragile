@@ -2,10 +2,11 @@
   import { AlertCircle, Dumbbell, Flame, Frown, Meh, Plus, Smile, Star, Timer, TrendingUp, Zap } from "@lucide/svelte";
   import { useConvexClient, useQuery } from "convex-svelte";
   import { api } from "../../convex/_generated/api";
+  import { Button, Input, FloatingActionButton, Modal } from "$lib/components/ui";
+  
   const client = useConvexClient();
   let activeTab = $state<"workouts" | "running">("workouts");
-  let showAddWorkout = $state(false);
-  let showAddRun = $state(false);
+  let showAddModal = $state(false);
   // Queries
   const recentWorkouts = useQuery(api.workouts.getRecentWorkouts, {
     limit: 10,
@@ -73,7 +74,7 @@
       workoutDuration = 30;
       workoutNotes = "";
       exercises = [{ name: "", sets: 3, reps: 10 }];
-      showAddWorkout = false;
+      showAddModal = false;
     } catch (error) {
       console.error("Failed to add workout:", error);
     }
@@ -94,7 +95,7 @@
       runDuration = 30;
       runFeeling = "good";
       runNotes = "";
-      showAddRun = false;
+      showAddModal = false;
     } catch (error) {
       console.error("Failed to add run:", error);
     }
@@ -208,10 +209,10 @@
             </div>
             <h3 class="empty-title">No Workouts Yet</h3>
             <p class="empty-subtitle">Start tracking your fitness journey</p>
-            <button class="btn-primary" onclick={() => (showAddWorkout = true)}>
+            <Button variant="primary" onclick={() => (showAddModal = true)}>
               <Plus size={20} />
               Log Your First Workout
-            </button>
+            </Button>
           </div>
         {:else if recentWorkouts.data}
           {#each recentWorkouts.data as workout (workout._id)}
@@ -294,10 +295,10 @@
             </div>
             <h3 class="empty-title">No Runs Yet</h3>
             <p class="empty-subtitle">Start tracking your running progress</p>
-            <button class="btn-primary" onclick={() => (showAddRun = true)}>
+            <Button variant="primary" onclick={() => (showAddModal = true)}>
               <Plus size={20} />
               Log Your First Run
-            </button>
+            </Button>
           </div>
         {:else if recentRuns.data}
           {#each recentRuns.data as run (run._id)}
@@ -335,293 +336,205 @@
       </div>
     </div>
   {/if}
-  <!-- Add Workout Modal -->
-  {#if showAddWorkout}
-    <div
-      class="modal-overlay"
-      onclick={() => (showAddWorkout = false)}
-      onkeydown={(e) => e.key === "Escape" && (showAddWorkout = false)}
-      role="button"
-      tabindex="0"
-    >
-      <div class="modal-content" onclick={(e) => e.stopPropagation()}>
-        <div class="modal-header">
-          <h2 class="modal-title">Log Workout</h2>
+  <!-- Floating Action Button -->
+  <FloatingActionButton onclick={() => (showAddModal = true)} label={activeTab === "workouts" ? "Add workout" : "Add run"} />
+
+  <!-- Workout Modal -->
+  <Modal open={showAddModal && activeTab === "workouts"} onClose={() => (showAddModal = false)} title="Log Workout">
+    <form onsubmit={handleAddWorkout} class="fitness-form">
+      <div class="form-group">
+        <Input
+          bind:value={workoutName}
+          placeholder="Workout name"
+          maxlength={50}
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Duration (minutes)</label>
+        <div class="counter-compact">
           <button
-            class="close-btn"
-            aria-label="Close"
-            onclick={() => (showAddWorkout = false)}
+            type="button"
+            class="counter-btn-sm"
+            onclick={() => workoutDuration > 5 && (workoutDuration -= 5)}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M6 6L18 18M6 18L18 6"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-            </svg>
+            −
+          </button>
+          <input
+            type="number"
+            class="counter-input"
+            bind:value={workoutDuration}
+            min="5"
+            max="180"
+          />
+          <button
+            type="button"
+            class="counter-btn-sm"
+            onclick={() => workoutDuration < 180 && (workoutDuration += 5)}
+          >
+            +
           </button>
         </div>
-        <form onsubmit={handleAddWorkout} class="modal-form">
-          <div class="form-group">
-            <label class="form-label" for="workout-name">Workout Name</label>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Exercises</label>
+        {#each exercises as exercise, i}
+          <div class="exercise-row">
             <input
               type="text"
-              id="workout-name"
-              bind:value={workoutName}
-              placeholder="e.g., Upper Body Strength"
-              class="form-input"
+              bind:value={exercise.name}
+              placeholder="Exercise"
+              list="exercise-suggestions"
+              class="exercise-input"
             />
-          </div>
-          <div class="form-group">
-            <label class="form-label" id="duration-label"
-              >Duration (minutes)</label
-            >
-            <div class="counter" role="group" aria-labelledby="duration-label">
+            <input
+              type="number"
+              bind:value={exercise.sets}
+              placeholder="Sets"
+              min="1"
+              max="20"
+              class="exercise-number"
+            />
+            <input
+              type="number"
+              bind:value={exercise.reps}
+              placeholder="Reps"
+              min="1"
+              max="100"
+              class="exercise-number"
+            />
+            {#if exercises.length > 1}
               <button
                 type="button"
-                class="counter-btn"
-                onclick={() => workoutDuration > 5 && (workoutDuration -= 5)}
-                >−</button
+                class="remove-btn-sm"
+                onclick={() => removeExercise(i)}
               >
-              <div class="counter-value">{workoutDuration}</div>
-              <button
-                type="button"
-                class="counter-btn"
-                onclick={() => workoutDuration < 180 && (workoutDuration += 5)}
-                >+</button
-              >
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" id="exercises-label">Exercises</label>
-            <div role="group" aria-labelledby="exercises-label">
-              {#each exercises as exercise, i}
-                <div class="exercise-input-group">
-                  <input
-                    type="text"
-                    bind:value={exercise.name}
-                    placeholder="Exercise name"
-                    list="exercise-suggestions"
-                    class="form-input exercise-name-input"
-                  />
-                  <input
-                    type="number"
-                    bind:value={exercise.sets}
-                    placeholder="Sets"
-                    min="1"
-                    max="20"
-                    class="form-input exercise-number-input"
-                  />
-                  <input
-                    type="number"
-                    bind:value={exercise.reps}
-                    placeholder="Reps"
-                    min="1"
-                    max="100"
-                    class="form-input exercise-number-input"
-                  />
-                  {#if exercises.length > 1}
-                    <button
-                      type="button"
-                      class="remove-btn"
-                      aria-label="Remove exercise"
-                      onclick={() => removeExercise(i)}>×</button
-                    >
-                  {/if}
-                </div>
-              {/each}
-              <button
-                type="button"
-                class="btn-secondary btn-small"
-                onclick={addExercise}
-              >
-                <Plus size={16} />
-                Add Exercise
+                ×
               </button>
-            </div>
+            {/if}
           </div>
-          <datalist id="exercise-suggestions">
-            {#each suggestedExercises as exercise}
-              <option value={exercise}></option>
-            {/each}
-          </datalist>
-          <div class="form-group">
-            <label class="form-label" for="workout-notes"
-              >Notes <span class="optional">(optional)</span></label
-            >
-            <textarea
-              id="workout-notes"
-              bind:value={workoutNotes}
-              placeholder="How did it feel?"
-              class="form-textarea"
-              rows="2"
-            ></textarea>
-          </div>
-          <div class="modal-actions">
+        {/each}
+        <button
+          type="button"
+          class="add-exercise-btn"
+          onclick={addExercise}
+        >
+          <Plus size={16} />
+          Add Exercise
+        </button>
+      </div>
+
+      <datalist id="exercise-suggestions">
+        {#each suggestedExercises as exercise}
+          <option value={exercise}></option>
+        {/each}
+      </datalist>
+
+      <div class="modal-actions">
+        <Button type="submit" variant="primary" disabled={!workoutName.trim()} class="submit-btn-full">
+          <Plus size={20} />
+          Log Workout
+        </Button>
+      </div>
+    </form>
+  </Modal>
+
+  <!-- Run Modal -->
+  <Modal open={showAddModal && activeTab === "running"} onClose={() => (showAddModal = false)} title="Log Run">
+    <form onsubmit={handleAddRun} class="fitness-form">
+      <div class="form-row">
+        <div class="form-group form-group-half">
+          <label class="form-label">Distance (km)</label>
+          <div class="counter-compact">
             <button
               type="button"
-              class="btn-secondary"
-              onclick={() => (showAddWorkout = false)}>Cancel</button
+              class="counter-btn-sm"
+              onclick={() => runDistance > 0.5 && (runDistance = Math.round((runDistance - 0.5) * 10) / 10)}
             >
+              −
+            </button>
+            <input
+              type="number"
+              class="counter-input"
+              bind:value={runDistance}
+              min="0.5"
+              max="50"
+              step="0.1"
+            />
             <button
-              type="submit"
-              class="btn-primary"
-              disabled={!workoutName.trim()}
+              type="button"
+              class="counter-btn-sm"
+              onclick={() => runDistance < 50 && (runDistance = Math.round((runDistance + 0.5) * 10) / 10)}
             >
-              <Plus size={20} />
-              Log Workout
+              +
             </button>
           </div>
-        </form>
-      </div>
-    </div>
-  {/if}
-  <!-- Add Run Modal -->
-  {#if showAddRun}
-    <div
-      class="modal-overlay"
-      onclick={() => (showAddRun = false)}
-      onkeydown={(e) => e.key === "Escape" && (showAddRun = false)}
-      role="button"
-      tabindex="0"
-    >
-      <div class="modal-content" onclick={(e) => e.stopPropagation()}>
-        <div class="modal-header">
-          <h2 class="modal-title">Log Run</h2>
-          <button
-            class="close-btn"
-            aria-label="Close"
-            onclick={() => (showAddRun = false)}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M6 6L18 18M6 18L18 6"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
         </div>
-        <form onsubmit={handleAddRun} class="modal-form">
-          <div class="form-group">
-            <label class="form-label" id="distance-label">Distance (km)</label>
-            <div class="counter" role="group" aria-labelledby="distance-label">
-              <button
-                type="button"
-                class="counter-btn"
-                onclick={() =>
-                  runDistance > 0.5 &&
-                  (runDistance = Math.round((runDistance - 0.5) * 10) / 10)}
-                >−</button
-              >
-              <div class="counter-value">{runDistance.toFixed(1)}</div>
-              <button
-                type="button"
-                class="counter-btn"
-                onclick={() =>
-                  runDistance < 50 &&
-                  (runDistance = Math.round((runDistance + 0.5) * 10) / 10)}
-                >+</button
-              >
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" id="run-duration-label"
-              >Duration (minutes)</label
-            >
-            <div
-              class="counter"
-              role="group"
-              aria-labelledby="run-duration-label"
-            >
-              <button
-                type="button"
-                class="counter-btn"
-                onclick={() => runDuration > 5 && (runDuration -= 5)}>−</button
-              >
-              <div class="counter-value">{runDuration}</div>
-              <button
-                type="button"
-                class="counter-btn"
-                onclick={() => runDuration < 300 && (runDuration += 5)}
-                >+</button
-              >
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" id="feeling-label">How did it feel?</label
-            >
-            <div
-              class="feeling-buttons"
-              role="group"
-              aria-labelledby="feeling-label"
-            >
-              {#each ["excellent", "good", "okay", "tough", "struggled"] as feeling}
-                <button
-                  type="button"
-                  class="feeling-btn {runFeeling === feeling ? 'active' : ''}"
-                  onclick={() => (runFeeling = feeling)}
-                >
-                  <svelte:component this={getFeelingIcon(feeling)} size={20} strokeWidth={2} />
-                  <span class="feeling-label">{feeling}</span>
-                </button>
-              {/each}
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="run-notes"
-              >Notes <span class="optional">(optional)</span></label
-            >
-            <textarea
-              id="run-notes"
-              bind:value={runNotes}
-              placeholder="Route, conditions, thoughts..."
-              class="form-textarea"
-              rows="2"
-            ></textarea>
-          </div>
-          <div class="pace-display">
-            <div class="pace-label">Pace</div>
-            <div class="pace-value">
-              {formatPace(runDuration / runDistance)}
-              <span class="pace-unit">min/km</span>
-            </div>
-          </div>
-          <div class="modal-actions">
+
+        <div class="form-group form-group-half">
+          <label class="form-label">Duration (min)</label>
+          <div class="counter-compact">
             <button
               type="button"
-              class="btn-secondary"
-              onclick={() => (showAddRun = false)}>Cancel</button
+              class="counter-btn-sm"
+              onclick={() => runDuration > 5 && (runDuration -= 5)}
             >
-            <button type="submit" class="btn-primary">
-              <Plus size={20} />
-              Log Run
+              −
+            </button>
+            <input
+              type="number"
+              class="counter-input"
+              bind:value={runDuration}
+              min="5"
+              max="300"
+            />
+            <button
+              type="button"
+              class="counter-btn-sm"
+              onclick={() => runDuration < 300 && (runDuration += 5)}
+            >
+              +
             </button>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
-  {/if}
-  <!-- FAB -->
-  <button
-    class="fab"
-    aria-label="Add new workout or run"
-    onclick={() =>
-      activeTab === "workouts" ? (showAddWorkout = true) : (showAddRun = true)}
-  >
-    <Plus size={24} strokeWidth={2.5} />
-  </button>
+
+      <div class="form-group">
+        <label class="form-label">How did it feel?</label>
+        <div class="feeling-grid">
+          {#each ["excellent", "good", "okay", "tough", "struggled"] as feeling}
+            <button
+              type="button"
+              class="feeling-btn-compact {runFeeling === feeling ? 'active' : ''}"
+              onclick={() => (runFeeling = feeling)}
+            >
+              <svelte:component this={getFeelingIcon(feeling)} size={18} strokeWidth={2.5} />
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="pace-display-compact">
+        <span class="pace-label-sm">Pace:</span>
+        <span class="pace-value-sm">{formatPace(runDuration / runDistance)} min/km</span>
+      </div>
+
+      <div class="modal-actions">
+        <Button type="submit" variant="primary" class="submit-btn-full">
+          <Plus size={20} />
+          Log Run
+        </Button>
+      </div>
+    </form>
+  </Modal>
 </div>
 
 <style>
   .page {
-    min-height: 100vh;
     background: var(--color-bg-primary);
-    padding-bottom: calc(
-      var(--spacing-bottom-nav) + env(safe-area-inset-bottom, 0px) + 24px
-    );
+    padding: 16px;
+    padding-bottom: 24px;
   }
   /* Tabs */
   .tabs {
@@ -1127,5 +1040,215 @@
     to {
       transform: translateY(0);
     }
+  }
+
+  /* Compact Fitness Forms */
+  .fitness-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .form-row {
+    display: flex;
+    gap: 12px;
+  }
+
+  .form-group-half {
+    flex: 1;
+  }
+
+  .form-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+
+  .counter-compact {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .counter-btn-sm {
+    width: 36px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 600;
+    background: transparent;
+    color: var(--color-text-primary);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .counter-btn-sm:active:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .counter-input {
+    flex: 1;
+    height: 38px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    background: transparent;
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    outline: none;
+    -moz-appearance: textfield;
+  }
+
+  .counter-input::-webkit-outer-spin-button,
+  .counter-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .exercise-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .exercise-input {
+    flex: 2;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    outline: none;
+  }
+
+  .exercise-number {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    outline: none;
+  }
+
+  .remove-btn-sm {
+    width: 32px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: rgba(248, 113, 113, 0.1);
+    color: var(--color-error);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .remove-btn-sm:active {
+    transform: scale(0.95);
+    background: rgba(248, 113, 113, 0.2);
+  }
+
+  .add-exercise-btn {
+    width: 100%;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-text-secondary);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .add-exercise-btn:active {
+    transform: scale(0.98);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .feeling-grid {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .feeling-btn-compact {
+    flex: 1;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .feeling-btn-compact.active {
+    background: var(--color-accent);
+    color: #000000;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 16px rgba(167, 139, 250, 0.4);
+  }
+
+  .feeling-btn-compact:active {
+    transform: scale(0.95);
+  }
+
+  .pace-display-compact {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+  }
+
+  .pace-label-sm {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .pace-value-sm {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-accent);
+  }
+
+  :global(.submit-btn-full) {
+    flex: 1;
   }
 </style>

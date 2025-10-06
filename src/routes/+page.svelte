@@ -1,9 +1,7 @@
 <script lang="ts">
   import {
     Activity,
-    BarChart3,
     Calendar,
-    CheckCircle,
     Dumbbell,
     Flame,
     Target,
@@ -14,12 +12,17 @@
   import { api } from "../convex/_generated/api";
 
   // Fetch data from all modules
-  const todos = useQuery(api.todos.getTodos, { includeCompleted: true });
+  const todos = useQuery(api.todos.getTodos, { includeCompleted: false });
+  const allTodos = useQuery(api.todos.getTodos, { includeCompleted: true });
   const dailySummary = useQuery(api.todos.getDailyTasksSummary, {});
   const habitsSummary = useQuery(api.habits.getHabitsSummary, {});
   const runStats = useQuery(api.runs.getRunStats, {});
   const workoutStats = useQuery(api.workouts.getWorkoutStats, {});
   const matrixSummary = useQuery(api.eisenhower.getMatrixSummary, {});
+
+  // Animated score counter
+  let displayScore = $state(0);
+  let isScoreLoaded = $state(false);
 
   // Calculate productivity score (0-100)
   const productivityScore = $derived(() => {
@@ -65,390 +68,481 @@
 
   // Calculate completion rate
   const completionRate = $derived(() => {
-    if (!todos.data) return 0;
-    const completed = todos.data.filter((t) => t.isCompleted).length;
-    const total = todos.data.length;
+    if (!allTodos.data) return 0;
+    const completed = allTodos.data.filter((t) => t.isCompleted).length;
+    const total = allTodos.data.length;
     return total > 0 ? Math.round((completed / total) * 100) : 0;
   });
 
-  // Weekly activity data (mock for visualization)
-  const weeklyActivity = [
-    { day: "Mon", todos: 5, habits: 3, workouts: 1 },
-    { day: "Tue", todos: 7, habits: 4, workouts: 0 },
-    { day: "Wed", todos: 6, habits: 3, workouts: 1 },
-    { day: "Thu", todos: 8, habits: 4, workouts: 1 },
-    { day: "Fri", todos: 4, habits: 3, workouts: 0 },
-    { day: "Sat", todos: 3, habits: 2, workouts: 1 },
-    { day: "Sun", todos: 2, habits: 2, workouts: 1 },
-  ];
+  // Calculate active todos count
+  const activeTodosCount = $derived(() => {
+    if (!todos.data) return 0;
+    return todos.data.length;
+  });
 
-  const maxActivity = Math.max(
-    ...weeklyActivity.map((d) => d.todos + d.habits + d.workouts),
-  );
+  const completedTodosCount = $derived(() => {
+    if (!allTodos.data) return 0;
+    return allTodos.data.filter((t) => t.isCompleted).length;
+  });
+
+  // Weekly activity data - last 7 days (only today has real data)
+  let weeklyActivity = $derived.by(() => {
+    const days = ["日", "月", "火", "水", "木", "金", "土"];
+    const today = new Date();
+    
+    // Get actual counts for today only
+    const totalTodos = (activeTodosCount() || 0) + (completedTodosCount() || 0);
+    const totalHabits = habitsSummary.data?.totalCompleted ?? 0;
+    const totalFitness = (workoutStats.data?.thisWeek ?? 0) + (runStats.data?.thisWeek ?? 0);
+    
+    // Create last 7 days of activity
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = new Date(today);
+      date.setDate(date.getDate() - (6 - i)); // Start from 6 days ago
+      const dayOfWeek = date.getDay();
+      const isToday = i === 6;
+      
+      return {
+        day: days[dayOfWeek],
+        date: date.getDate(),
+        month: date.getMonth() + 1,
+        isToday,
+        // Only today has real data, past days are 0
+        todos: isToday ? totalTodos : 0,
+        habits: isToday ? totalHabits : 0,
+        workouts: isToday ? totalFitness : 0,
+      };
+    });
+  });
+
+  let maxActivity = $derived.by(() => {
+    if (!weeklyActivity || weeklyActivity.length === 0) return 10;
+    const totals = weeklyActivity.map((d) => d.todos + d.habits + d.workouts);
+    const max = Math.max(...totals, 1);
+    return max > 0 ? max : 10;
+  });
+
+  // Activity detail popup state
+  let selectedDay: any = $state(null);
+  
+  function showDayDetail(day: any) {
+    selectedDay = day;
+  }
+  
+  function closeDayDetail() {
+    selectedDay = null;
+  }
+
+  // Auto-scroll to today on mount
+  $effect(() => {
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        const scrollContainer = document.getElementById('activity-scroll');
+        if (scrollContainer) {
+          // Scroll to show today on the right (last item)
+          scrollContainer.scrollLeft = scrollContainer.scrollWidth;
+        }
+      }, 100);
+    }
+  });
+
+  // Animate score counter - count 0-30 in first second, then snap to real value
+  let animationInterval: ReturnType<typeof setInterval> | null = null;
+  
+  $effect(() => {
+    const targetScore = productivityScore();
+    
+    if (!isScoreLoaded) {
+      isScoreLoaded = true;
+      
+      // Count from 0 to 30 over 1 second
+      const duration = 1000;
+      const maxLoadingScore = 30;
+      const steps = 30;
+      const stepDuration = duration / steps;
+      
+      let currentStep = 0;
+      animationInterval = setInterval(() => {
+        currentStep++;
+        displayScore = currentStep;
+        
+        if (currentStep >= maxLoadingScore) {
+          if (animationInterval) clearInterval(animationInterval);
+          animationInterval = null;
+        }
+      }, stepDuration);
+      
+      return () => {
+        if (animationInterval) clearInterval(animationInterval);
+      };
+    }
+    
+    // When data loads, smoothly transition to real value
+    if (targetScore > 0 && displayScore !== targetScore) {
+      // Clear any existing animation
+      if (animationInterval) {
+        clearInterval(animationInterval);
+        animationInterval = null;
+      }
+      
+      const startScore = displayScore;
+      const diff = targetScore - startScore;
+      const duration = 600;
+      const steps = 30;
+      const stepDuration = duration / steps;
+      
+      let currentStep = 0;
+      animationInterval = setInterval(() => {
+        currentStep++;
+        const progress = currentStep / steps;
+        const eased = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+        displayScore = Math.round(startScore + (diff * eased));
+        
+        if (currentStep >= steps) {
+          displayScore = targetScore;
+          if (animationInterval) clearInterval(animationInterval);
+          animationInterval = null;
+        }
+      }, stepDuration);
+    }
+  });
 </script>
 
 <div class="page">
   <div class="content">
-    <!-- Productivity Score Card -->
-    <div class="score-card card-glass depth-3">
-      <div class="score-header">
-        <div class="score-icon">
-          <TrendingUp size={24} />
-        </div>
-        <div>
-          <div class="score-label">Productivity Score</div>
-          <div class="score-subtitle">Based on all activities</div>
-        </div>
-      </div>
-
-      <div class="score-display">
-        <svg class="score-ring" viewBox="0 0 200 200">
-          <circle
-            cx="100"
-            cy="100"
-            r="80"
-            fill="none"
-            stroke="var(--color-surface-2)"
-            stroke-width="16"
-          />
-          <circle
-            cx="100"
-            cy="100"
-            r="80"
-            fill="none"
-            stroke={getScoreColor(productivityScore())}
-            stroke-width="16"
-            stroke-dasharray="{(productivityScore() / 100) * 502.65} 502.65"
-            stroke-linecap="round"
-            transform="rotate(-90 100 100)"
-            class="score-progress"
-            style="filter: drop-shadow(0 0 8px {getScoreColor(
-              productivityScore(),
-            )}40);"
-          />
-        </svg>
-        <div class="score-value">
-          <span
+    <!-- Hero Score - Asymmetric Design -->
+    <div class="hero-score">
+      <div class="hero-main">
+        <div class="score-mega">
+          <div
             class="score-number"
-            style="color: {getScoreColor(productivityScore())};"
+            style="color: {getScoreColor(displayScore)};"
           >
-            {productivityScore()}
-          </span>
-          <span class="score-percent">%</span>
+            {displayScore}
+          </div>
+          <div class="score-label">Score</div>
         </div>
-      </div>
-
-      <div class="score-insights">
-        {#if productivityScore() >= 80}
-          <div class="insight-badge badge-success">
-            <Flame size={14} />
-            On Fire!
-          </div>
-        {:else if productivityScore() >= 60}
-          <div class="insight-badge badge-primary">
-            <Dumbbell size={14} />
-            Strong
-          </div>
-        {:else if productivityScore() >= 40}
-          <div class="insight-badge badge-warning">
-            <TrendingUp size={14} />
-            Building
-          </div>
-        {:else}
-          <div class="insight-badge badge-error">
-            <Target size={14} />
-            Focus Needed
-          </div>
-        {/if}
-      </div>
-    </div>
-
-    <!-- Quick Stats Grid -->
-    <div class="stats-grid">
-      <!-- Todos Stat -->
-      <div class="stat-card card">
-        <div class="stat-icon" style="background: rgba(139, 92, 246, 0.15);">
-          <CheckCircle size={20} style="color: var(--color-accent);" />
-        </div>
-        <div class="stat-content">
-          <div class="stat-value">
-            {dailySummary.data?.completed ?? 0}/{dailySummary.data?.total ?? 0}
-          </div>
-          <div class="stat-label">Daily Tasks</div>
-        </div>
-        <div class="stat-trend">
-          <div class="mini-bar">
-            <div
-              class="mini-bar-fill"
-              style="width: {dailySummary.data?.percentage ??
-                0}%; background: var(--color-accent);"
-            ></div>
+        <div class="score-visual">
+          <svg viewBox="0 0 100 100" class="score-arc">
+            <path
+              d="M 10 90 Q 10 10, 90 10"
+              fill="none"
+              stroke="rgba(255,255,255,0.05)"
+              stroke-width="2"
+            />
+            <path
+              d="M 10 90 Q 10 10, 90 10"
+              fill="none"
+              stroke={getScoreColor(displayScore)}
+              stroke-width="2"
+              stroke-dasharray="{(displayScore / 100) * 120} 120"
+              stroke-linecap="round"
+              class="score-arc-fill"
+            />
+          </svg>
+          <div class="score-status-badge">
+            {#if displayScore >= 80}
+              <Flame size={14} strokeWidth={2.5} />
+            {:else if displayScore >= 60}
+              <TrendingUp size={14} strokeWidth={2.5} />
+            {:else if displayScore >= 40}
+              <Target size={14} strokeWidth={2.5} />
+            {:else}
+              <Zap size={14} strokeWidth={2.5} />
+            {/if}
           </div>
         </div>
       </div>
 
-      <!-- Habits Stat -->
-      <div class="stat-card card">
-        <div class="stat-icon" style="background: rgba(16, 185, 129, 0.15);">
-          <Target size={20} style="color: var(--color-success);" />
-        </div>
-        <div class="stat-content">
-          <div class="stat-value">
-            {habitsSummary.data?.totalCompleted ?? 0}/{habitsSummary.data
-              ?.totalTarget ?? 0}
+      <!-- Metrics Grid - Staggered -->
+      <div class="metrics-grid">
+        <a href="/todos" class="metric-pill" style="--delay: 0s;">
+          <div class="metric-value">
+            {completedTodosCount()}<span class="metric-total"
+              >/{activeTodosCount() + completedTodosCount()}</span
+            >
           </div>
-          <div class="stat-label">Habits Done</div>
-        </div>
-        <div class="stat-trend">
-          <div class="mini-bar">
-            <div
-              class="mini-bar-fill"
-              style="width: {habitsSummary.data?.percentage ??
-                0}%; background: var(--color-success);"
-            ></div>
+          <div class="metric-label">Tasks</div>
+          <div
+            class="metric-bar"
+            style="width: {completionRate()}%; background: var(--color-accent);"
+          ></div>
+        </a>
+        <a href="/habits" class="metric-pill" style="--delay: 0.1s;">
+          <div class="metric-value">
+            {habitsSummary.data?.totalCompleted ?? 0}<span class="metric-total"
+              >/{habitsSummary.data?.totalTarget ?? 0}</span
+            >
           </div>
-        </div>
-      </div>
-
-      <!-- Workouts Stat -->
-      <div class="stat-card card">
-        <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15);">
-          <Flame size={20} style="color: var(--color-warning);" />
-        </div>
-        <div class="stat-content">
-          <div class="stat-value">{workoutStats.data?.thisWeek ?? 0}</div>
-          <div class="stat-label">Workouts</div>
-        </div>
-        <div class="stat-trend">
-          <span class="trend-text">This week</span>
-        </div>
-      </div>
-
-      <!-- Running Stat -->
-      <div class="stat-card card">
-        <div class="stat-icon" style="background: rgba(59, 130, 246, 0.15);">
-          <BarChart3 size={20} style="color: var(--color-info);" />
-        </div>
-        <div class="stat-content">
-          <div class="stat-value">{runStats.data?.thisWeek ?? 0}</div>
-          <div class="stat-label">Runs</div>
-        </div>
-        <div class="stat-trend">
-          <span class="trend-text">This week</span>
-        </div>
+          <div class="metric-label">Habits</div>
+          <div
+            class="metric-bar"
+            style="width: {habitsSummary.data?.percentage ??
+              0}%; background: var(--color-success);"
+          ></div>
+        </a>
+        <a href="/fitness" class="metric-pill" style="--delay: 0.2s;">
+          <div class="metric-value">{workoutStats.data?.thisWeek ?? 0}</div>
+          <div class="metric-label">Workouts</div>
+        </a>
+        <a href="/fitness" class="metric-pill" style="--delay: 0.3s;">
+          <div class="metric-value">{runStats.data?.thisWeek ?? 0}</div>
+          <div class="metric-label">Runs</div>
+        </a>
       </div>
     </div>
 
-    <!-- Weekly Activity Chart -->
-    <div class="chart-card card-glass">
-      <div class="chart-header">
-        <div class="chart-title">
-          <Calendar size={20} />
-          Weekly Activity
-        </div>
-        <div class="chart-legend">
-          <div class="legend-item">
-            <span class="legend-dot" style="background: var(--color-accent);"
-            ></span>
-            Todos
-          </div>
-          <div class="legend-item">
-            <span class="legend-dot" style="background: var(--color-success);"
-            ></span>
-            Habits
-          </div>
-          <div class="legend-item">
-            <span class="legend-dot" style="background: var(--color-warning);"
-            ></span>
-            Workouts
-          </div>
-        </div>
+    <!-- Activity Visualization - Scrollable 3-day view -->
+    <div class="activity-section">
+      <div class="section-label">
+        <Calendar size={14} strokeWidth={2.5} />
+        <span>Activity</span>
       </div>
+      <div class="activity-scroll" id="activity-scroll">
+        {#each weeklyActivity as day}
+          {@const total = day.todos + day.habits + day.workouts}
+          {@const barHeightPx = total > 0 ? Math.max((total / maxActivity) * 100, 20) : 12}
+          {@const todoPx = total > 0 ? (day.todos / total) * barHeightPx : 0}
+          {@const habitPx = total > 0 ? (day.habits / total) * barHeightPx : 0}
+          {@const workoutPx = total > 0 ? (day.workouts / total) * barHeightPx : 0}
+          <button 
+            class="day-card" 
+            class:today={day.isToday}
+            class:empty={total === 0}
+            onclick={() => showDayDetail(day)}
+          >
+            <div class="day-header">
+              <div class="day-date">{day.month}/{day.date}</div>
+              <div class="day-name">{day.day}</div>
+            </div>
+            <div class="bar-wrapper">
+              {#if total > 0}
+                <div class="bar-container" style="height: {barHeightPx}px;">
+                  {#if day.todos > 0}
+                    <div class="bar-fill todos" style="height: {todoPx}px;"></div>
+                  {/if}
+                  {#if day.habits > 0}
+                    <div class="bar-fill habits" style="height: {habitPx}px;"></div>
+                  {/if}
+                  {#if day.workouts > 0}
+                    <div class="bar-fill workouts" style="height: {workoutPx}px;"></div>
+                  {/if}
+                </div>
+              {:else}
+                <div class="empty-bar"></div>
+              {/if}
+            </div>
+          </button>
+        {/each}
+      </div>
+    </div>
 
-      <div class="chart">
-        <div class="chart-bars">
-          {#each weeklyActivity as day}
-            <div class="bar-group">
-              <div class="bar-stack">
-                {#if day.workouts > 0}
-                  <div
-                    class="bar-segment"
-                    style="height: {(day.workouts / maxActivity) *
-                      100}%; background: var(--color-warning);"
-                    title="Workouts: {day.workouts}"
-                  ></div>
-                {/if}
-                {#if day.habits > 0}
-                  <div
-                    class="bar-segment"
-                    style="height: {(day.habits / maxActivity) *
-                      100}%; background: var(--color-success);"
-                    title="Habits: {day.habits}"
-                  ></div>
-                {/if}
-                {#if day.todos > 0}
-                  <div
-                    class="bar-segment"
-                    style="height: {(day.todos / maxActivity) *
-                      100}%; background: var(--color-accent);"
-                    title="Todos: {day.todos}"
-                  ></div>
-                {/if}
+    <!-- Activity Detail Popup -->
+    {#if selectedDay}
+      <div class="popup-overlay" onclick={closeDayDetail}>
+        <div class="popup-content" onclick={(e) => e.stopPropagation()}>
+          <div class="popup-header">
+            <div>
+              <div class="popup-title">{selectedDay.month}/{selectedDay.date}</div>
+              <div class="popup-subtitle">{selectedDay.day}曜日</div>
+            </div>
+            <button class="popup-close" onclick={closeDayDetail}>×</button>
+          </div>
+          <div class="popup-body">
+            <div class="detail-row">
+              <div class="detail-icon todos-bg">
+                <Calendar size={16} strokeWidth={2.5} />
               </div>
-              <div class="bar-label">{day.day}</div>
+              <div class="detail-info">
+                <div class="detail-label">Tasks</div>
+                <div class="detail-value">{selectedDay.todos}</div>
+              </div>
             </div>
-          {/each}
-        </div>
-      </div>
-    </div>
-
-    <!-- Focus Distribution (Eisenhower) -->
-    {#if matrixSummary.data}
-      <div class="chart-card card-glass">
-        <div class="chart-header">
-          <div class="chart-title">
-            <BarChart3 size={20} />
-            Focus Distribution
-          </div>
-          <div class="chart-subtitle">Eisenhower Matrix</div>
-        </div>
-
-        <div class="matrix-grid">
-          <div
-            class="matrix-quadrant"
-            style="border-color: var(--color-error);"
-          >
-            <div class="matrix-label">Do First</div>
-            <div class="matrix-value">
-              {matrixSummary.data.urgentImportant.total}
+            <div class="detail-row">
+              <div class="detail-icon habits-bg">
+                <Target size={16} strokeWidth={2.5} />
+              </div>
+              <div class="detail-info">
+                <div class="detail-label">Habits</div>
+                <div class="detail-value">{selectedDay.habits}</div>
+              </div>
             </div>
-            <div class="matrix-sublabel">Urgent + Important</div>
-          </div>
-          <div class="matrix-quadrant" style="border-color: var(--color-info);">
-            <div class="matrix-label">Schedule</div>
-            <div class="matrix-value">
-              {matrixSummary.data.notUrgentImportant.total}
+            <div class="detail-row">
+              <div class="detail-icon workouts-bg">
+                <Dumbbell size={16} strokeWidth={2.5} />
+              </div>
+              <div class="detail-info">
+                <div class="detail-label">Fitness</div>
+                <div class="detail-value">{selectedDay.workouts}</div>
+              </div>
             </div>
-            <div class="matrix-sublabel">Important</div>
-          </div>
-          <div
-            class="matrix-quadrant"
-            style="border-color: var(--color-warning);"
-          >
-            <div class="matrix-label">Delegate</div>
-            <div class="matrix-value">
-              {matrixSummary.data.urgentNotImportant.total}
-            </div>
-            <div class="matrix-sublabel">Urgent</div>
-          </div>
-          <div
-            class="matrix-quadrant"
-            style="border-color: var(--color-text-tertiary);"
-          >
-            <div class="matrix-label">Eliminate</div>
-            <div class="matrix-value">
-              {matrixSummary.data.notUrgentNotImportant.total}
-            </div>
-            <div class="matrix-sublabel">Neither</div>
           </div>
         </div>
       </div>
     {/if}
 
-    <!-- Correlations & Insights -->
-    <div class="insights-card card-glass">
-      <div class="chart-header">
-        <div class="chart-title">
-          <TrendingUp size={20} />
-          Insights & Correlations
+    <!-- Focus & Insights - Split Layout -->
+    <div class="split-section">
+      {#if matrixSummary.data}
+        {@const total = matrixSummary.data.urgentImportant.total + 
+                        matrixSummary.data.notUrgentImportant.total + 
+                        matrixSummary.data.urgentNotImportant.total + 
+                        matrixSummary.data.notUrgentNotImportant.total}
+        {@const radius = 40}
+        {@const circumference = 2 * Math.PI * radius}
+        {@const urgent = (matrixSummary.data.urgentImportant.total / (total || 1)) * circumference}
+        {@const important = (matrixSummary.data.notUrgentImportant.total / (total || 1)) * circumference}
+        {@const delegate = (matrixSummary.data.urgentNotImportant.total / (total || 1)) * circumference}
+        {@const eliminate = (matrixSummary.data.notUrgentNotImportant.total / (total || 1)) * circumference}
+        
+        <a href="/focus" class="focus-panel">
+          <div class="section-label">
+            <Target size={14} strokeWidth={2.5} />
+            <span>Focus</span>
+          </div>
+          <div class="donut-container">
+            <svg viewBox="0 0 100 100" class="donut-chart">
+              <circle cx="50" cy="50" r={radius} fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="16"/>
+              <circle cx="50" cy="50" r={radius} fill="none" stroke="#f87171" stroke-width="16" 
+                      stroke-dasharray="{urgent} {circumference}" 
+                      stroke-dashoffset="0" 
+                      transform="rotate(-90 50 50)" 
+                      class="donut-segment"
+                      style="filter: drop-shadow(0 0 8px rgba(248, 113, 113, 0.4));"/>
+              <circle cx="50" cy="50" r={radius} fill="none" stroke="#60a5fa" stroke-width="16" 
+                      stroke-dasharray="{important} {circumference}" 
+                      stroke-dashoffset="{-urgent}" 
+                      transform="rotate(-90 50 50)" 
+                      class="donut-segment"
+                      style="filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.4));"/>
+              <circle cx="50" cy="50" r={radius} fill="none" stroke="#fbbf24" stroke-width="16" 
+                      stroke-dasharray="{delegate} {circumference}" 
+                      stroke-dashoffset="{-(urgent + important)}" 
+                      transform="rotate(-90 50 50)" 
+                      class="donut-segment"
+                      style="filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.4));"/>
+              <circle cx="50" cy="50" r={radius} fill="none" stroke="#9ca3af" stroke-width="16" 
+                      stroke-dasharray="{eliminate} {circumference}" 
+                      stroke-dashoffset="{-(urgent + important + delegate)}" 
+                      transform="rotate(-90 50 50)" 
+                      class="donut-segment"
+                      style="filter: drop-shadow(0 0 6px rgba(156, 163, 175, 0.3));"/>
+              <text x="50" y="50" text-anchor="middle" dy="0.35em" class="donut-total">{total}</text>
+            </svg>
+          </div>
+          <div class="donut-legend">
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #f87171; box-shadow: 0 0 8px rgba(248, 113, 113, 0.4);"></span>
+              <span>{matrixSummary.data.urgentImportant.total}</span>
+            </div>
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #60a5fa; box-shadow: 0 0 8px rgba(96, 165, 250, 0.4);"></span>
+              <span>{matrixSummary.data.notUrgentImportant.total}</span>
+            </div>
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #fbbf24; box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);"></span>
+              <span>{matrixSummary.data.urgentNotImportant.total}</span>
+            </div>
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #9ca3af;"></span>
+              <span>{matrixSummary.data.notUrgentNotImportant.total}</span>
+            </div>
+          </div>
+        </a>
+      {:else}
+        <a href="/focus" class="focus-panel">
+          <div class="section-label">
+            <Target size={14} strokeWidth={2.5} />
+            <span>Focus</span>
+          </div>
+          <div class="donut-container">
+            <div class="skeleton-donut"></div>
+          </div>
+          <div class="skeleton-bars">
+            <div class="skeleton-bar"></div>
+            <div class="skeleton-bar"></div>
+            <div class="skeleton-bar"></div>
+            <div class="skeleton-bar"></div>
+          </div>
+        </a>
+      {/if}
+
+      <div class="insights-panel">
+        <div class="section-label">
+          <TrendingUp size={14} strokeWidth={2.5} />
+          <span>Insights</span>
         </div>
-      </div>
-
-      <div class="insights-list">
-        {#if workoutStats.data && workoutStats.data.thisWeek > 0 && completionRate() > 70}
-          <div class="insight-item">
-            <div class="insight-icon success">
-              <Dumbbell size={18} />
-            </div>
-            <div class="insight-content">
+        <div class="insights-stack">
+          {#if !workoutStats.data && !habitsSummary.data && !runStats.data}
+            <div class="skeleton-insight"></div>
+            <div class="skeleton-insight"></div>
+            <div class="skeleton-insight"></div>
+          {:else if workoutStats.data && workoutStats.data.thisWeek > 0 && completionRate() > 70}
+            <div class="insight-line">
+              <Dumbbell
+                size={12}
+                strokeWidth={2.5}
+                style="color: var(--color-success);"
+              />
               <div class="insight-text">
-                <strong>Workout Boost</strong> - {workoutStats.data.thisWeek} workouts
-                this week correlates with {completionRate()}% task completion
-              </div>
-              <div class="insight-bar">
-                <div class="insight-bar-fill success" style="width: 85%;"></div>
+                <span class="insight-title">Workout boost</span>
+                <span class="insight-detail">{workoutStats.data.thisWeek} sessions → {completionRate()}% completion</span>
               </div>
             </div>
-          </div>
-        {/if}
-
-        {#if habitsSummary.data && habitsSummary.data.percentage > 80}
-          <div class="insight-item">
-            <div class="insight-icon success">
-              <Flame size={18} />
-            </div>
-            <div class="insight-content">
+          {/if}
+          {#if habitsSummary.data && habitsSummary.data.percentage > 80}
+            <div class="insight-line">
+              <Flame
+                size={12}
+                strokeWidth={2.5}
+                style="color: var(--color-success);"
+              />
               <div class="insight-text">
-                <strong>Habit Streak</strong> - {habitsSummary.data.percentage}%
-                habit completion shows strong consistency
-              </div>
-              <div class="insight-bar">
-                <div
-                  class="insight-bar-fill success"
-                  style="width: {habitsSummary.data.percentage}%;"
-                ></div>
+                <span class="insight-title">Strong streak</span>
+                <span class="insight-detail">{habitsSummary.data.percentage}% habit consistency</span>
               </div>
             </div>
-          </div>
-        {/if}
-
-        {#if runStats.data && runStats.data.thisWeek >= 3}
-          <div class="insight-item">
-            <div class="insight-icon info">
-              <Activity size={18} />
-            </div>
-            <div class="insight-content">
+          {/if}
+          {#if runStats.data && runStats.data.thisWeek >= 3}
+            <div class="insight-line">
+              <Activity
+                size={12}
+                strokeWidth={2.5}
+                style="color: var(--color-info);"
+              />
               <div class="insight-text">
-                <strong>Running Rhythm</strong> - {runStats.data.thisWeek} runs per
-                week enhances mental clarity
-              </div>
-              <div class="insight-bar">
-                <div class="insight-bar-fill info" style="width: 75%;"></div>
+                <span class="insight-title">Running rhythm</span>
+                <span class="insight-detail">{runStats.data.thisWeek} runs this week</span>
               </div>
             </div>
-          </div>
-        {/if}
-
-        {#if dailySummary.data && dailySummary.data.percentage < 50}
-          <div class="insight-item">
-            <div class="insight-icon warning">
-              <Zap size={18} />
-            </div>
-            <div class="insight-content">
+          {/if}
+          {#if activeTodosCount() > 5}
+            <div class="insight-line">
+              <Zap
+                size={12}
+                strokeWidth={2.5}
+                style="color: var(--color-warning);"
+              />
               <div class="insight-text">
-                <strong>Focus Opportunity</strong> - {dailySummary.data
-                  .remaining} daily tasks remaining
-              </div>
-              <div class="insight-bar">
-                <div class="insight-bar-fill warning" style="width: 40%;"></div>
+                <span class="insight-title">Focus needed</span>
+                <span class="insight-detail">{activeTodosCount()} active tasks</span>
               </div>
             </div>
-          </div>
-        {/if}
-
-        {#if !habitsSummary.data || habitsSummary.data.totalHabits === 0}
-          <div class="insight-item">
-            <div class="insight-icon neutral">
-              <Target size={18} />
-            </div>
-            <div class="insight-content">
+          {/if}
+          {#if (!habitsSummary.data || habitsSummary.data.totalHabits === 0)}
+            <div class="insight-line">
+              <Target
+                size={12}
+                strokeWidth={2.5}
+                style="color: var(--color-text-tertiary);"
+              />
               <div class="insight-text">
-                <strong>Build Habits</strong> - Start tracking habits to build consistent
-                routines
+                <span class="insight-title">Build habits</span>
+                <span class="insight-detail">Start tracking daily routines</span>
               </div>
             </div>
-          </div>
-        {/if}
+          {/if}
+        </div>
       </div>
     </div>
   </div>
@@ -456,387 +550,717 @@
 
 <style>
   .page {
-    min-height: 100vh;
     background: var(--color-bg-primary);
+    position: relative;
+  }
+
+  .page::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40vh;
+    background: radial-gradient(
+      ellipse at top,
+      rgba(139, 92, 246, 0.08) 0%,
+      transparent 70%
+    );
+    pointer-events: none;
+    z-index: 0;
+    animation: ambientPulse 8s ease-in-out infinite;
+  }
+
+  @keyframes ambientPulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
   }
 
   .content {
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  /* Score Card */
-  .score-card {
-    padding: 24px;
-    text-align: center;
-  }
-
-  .score-header {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    padding: 20px 16px 16px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: auto;
     gap: 12px;
-    margin-bottom: 24px;
+    position: relative;
+    z-index: 1;
+    min-height: 0;
   }
 
-  .score-icon {
-    width: 40px;
-    height: 40px;
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Hero Score - Bento Grid: Full Width */
+  .hero-score {
+    grid-column: 1 / -1;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0.01) 100%
+    );
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 20px 60px rgba(0, 0, 0, 0.8),
+      0 8px 24px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .hero-score::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(
+      circle,
+      rgba(139, 92, 246, 0.1) 0%,
+      transparent 70%
+    );
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .hero-main {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(139, 92, 246, 0.15);
-    border-radius: var(--radius-md);
-    color: var(--color-accent);
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .score-mega {
+    flex: 1;
+  }
+
+  .score-number {
+    font-size: 72px;
+    font-weight: 800;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+    margin-bottom: 4px;
+    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   }
 
   .score-label {
-    font-size: 18px;
+    font-size: 11px;
     font-weight: 600;
-    color: var(--color-text-primary);
-  }
-
-  .score-subtitle {
-    font-size: 12px;
     color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
   }
 
-  .score-display {
+  .score-visual {
     position: relative;
-    width: 200px;
-    height: 200px;
-    margin: 0 auto 20px;
+    width: 100px;
+    height: 100px;
   }
 
-  .score-ring {
+  .score-arc {
     width: 100%;
     height: 100%;
   }
 
-  .score-progress {
-    transition:
-      stroke-dasharray 1s ease-out,
-      stroke 0.3s ease;
+  .score-arc-fill {
+    transition: stroke-dasharray 1.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  .score-value {
+  .score-status-badge {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
+    bottom: 0;
+    right: 0;
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    animation: pulse 3s ease-in-out infinite;
   }
 
-  .score-number {
-    font-size: 56px;
-    font-weight: 700;
-    line-height: 1;
+  @keyframes pulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.05);
+      opacity: 0.9;
+    }
+  }
+
+  /* Metrics Grid - Staggered Pills */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .metric-pill {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+    animation: slideUp 0.5s ease-out backwards;
+    animation-delay: var(--delay);
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    transition: all 0.2s ease;
+    text-decoration: none;
     display: block;
   }
 
-  .score-percent {
+  .metric-pill:active {
+    transform: scale(0.98);
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .metric-value {
     font-size: 24px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .metric-total {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+  }
+
+  .metric-label {
+    font-size: 11px;
     font-weight: 600;
-    color: var(--color-text-secondary);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
-  .score-insights {
+  .metric-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 12px currentColor, 0 0 4px currentColor;
+    opacity: 0.9;
+  }
+
+  /* Section Label - Consistent Style */
+  .section-label {
     display: flex;
-    justify-content: center;
-  }
-
-  .insight-badge {
-    display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 18px;
-    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 14px;
+  }
+
+  /* Activity Section - Bento Grid: Full Width */
+  .activity-section {
+    grid-column: 1 / -1;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    padding: 18px;
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .activity-scroll {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+    scroll-behavior: smooth;
+    flex: 1;
+    min-height: 140px;
+  }
+
+  .activity-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .day-card {
+    flex: 0 0 calc(33.333% - 7px);
+    min-width: 90px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-snap-align: start;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+    padding: 12px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .day-card:active {
+    transform: scale(0.98);
+  }
+
+  .day-card.today {
+    background: rgba(167, 139, 250, 0.08);
+    border-color: rgba(167, 139, 250, 0.3);
+    box-shadow: 0 0 20px rgba(167, 139, 250, 0.15);
+  }
+
+  .day-card.empty {
+    opacity: 0.4;
+  }
+
+  .day-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .day-date {
     font-size: 13px;
-    font-weight: var(--font-weight-semibold);
-    letter-spacing: -0.01em;
+    font-weight: 700;
+    color: var(--color-text-primary);
   }
 
-  /* Stats Grid */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+  .day-name {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
-  .stat-card {
-    padding: 16px;
+  .bar-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    min-height: 60px;
+  }
+
+  .bar-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  .empty-bar {
+    width: 100%;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+  }
+
+  .bar-fill {
+    width: 100%;
+  }
+
+  .bar-fill.todos {
+    background: linear-gradient(180deg, var(--color-accent), rgba(167, 139, 250, 0.7));
+    box-shadow: 0 0 12px rgba(167, 139, 250, 0.3);
+  }
+
+  .bar-fill.habits {
+    background: linear-gradient(180deg, var(--color-success), rgba(52, 211, 153, 0.7));
+    box-shadow: 0 0 12px rgba(52, 211, 153, 0.3);
+  }
+
+  .bar-fill.workouts {
+    background: linear-gradient(180deg, var(--color-cyan), rgba(34, 211, 238, 0.7));
+    box-shadow: 0 0 12px rgba(34, 211, 238, 0.3);
+  }
+
+  /* Activity Detail Popup */
+  .popup-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .popup-content {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.06));
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 320px;
+    box-shadow: 
+      0 20px 60px rgba(0, 0, 0, 0.9),
+      0 8px 24px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    animation: slideUp 0.3s ease;
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .popup-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+  }
+
+  .popup-subtitle {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    margin-top: 2px;
+  }
+
+  .popup-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--color-text-secondary);
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .popup-close:active {
+    transform: scale(0.95);
+  }
+
+  .popup-body {
+    padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 12px;
   }
 
-  .stat-icon {
-    width: 40px;
-    height: 40px;
+  .detail-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+  }
+
+  .detail-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--radius-md);
   }
 
-  .stat-content {
+  .detail-icon.todos-bg {
+    background: rgba(139, 92, 246, 0.15);
+    color: var(--color-accent);
+  }
+
+  .detail-icon.habits-bg {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--color-success);
+  }
+
+  .detail-icon.workouts-bg {
+    background: rgba(34, 211, 238, 0.15);
+    color: var(--color-cyan);
+  }
+
+  .detail-info {
     flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
 
-  .stat-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--color-text-primary);
-    line-height: 1;
-    margin-bottom: 4px;
-  }
-
-  .stat-label {
+  .detail-label {
     font-size: 13px;
+    font-weight: 600;
     color: var(--color-text-secondary);
   }
 
-  .stat-trend {
-    margin-top: auto;
-  }
-
-  .mini-bar {
-    height: 4px;
-    background: var(--color-surface-2);
-    border-radius: var(--radius-full);
-    overflow: hidden;
-  }
-
-  .mini-bar-fill {
-    height: 100%;
-    border-radius: var(--radius-full);
-    transition: width 0.5s ease-out;
-  }
-
-  .trend-text {
-    font-size: 11px;
-    color: var(--color-text-tertiary);
-  }
-
-  /* Chart Card */
-  .chart-card {
-    padding: 20px;
-  }
-
-  .chart-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .chart-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 16px;
-    font-weight: 600;
+  .detail-value {
+    font-size: 18px;
+    font-weight: 700;
     color: var(--color-text-primary);
   }
 
-  .chart-subtitle {
-    font-size: 12px;
-    color: var(--color-text-tertiary);
+  /* Split Section - Bento Grid: Already in 2-column grid */
+  .split-section {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
   }
 
-  .chart-legend {
+  /* Focus Panel */
+  .focus-panel {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    text-decoration: none;
     display: flex;
-    gap: 16px;
+    flex-direction: column;
+    transition: all 0.2s ease;
+    min-height: 200px;
   }
 
-  .legend-item {
+  .focus-panel:active {
+    transform: scale(0.98);
+  }
+
+  .donut-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+
+  .donut-chart {
+    width: 90px;
+    height: 90px;
+  }
+
+  .donut-segment {
+    transition: stroke-dasharray 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: fadeIn 0.6s ease-out;
+  }
+
+  /* Skeleton Loaders */
+  .skeleton-donut {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  .skeleton-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .skeleton-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  .skeleton-bar:nth-child(1) {
+    width: 100%;
+  }
+
+  .skeleton-bar:nth-child(2) {
+    width: 85%;
+  }
+
+  .skeleton-bar:nth-child(3) {
+    width: 70%;
+  }
+
+  .skeleton-bar:nth-child(4) {
+    width: 90%;
+  }
+
+  .skeleton-insight {
+    height: 48px;
+    border-radius: 8px;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  .skeleton-insight:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .skeleton-insight:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  .donut-total {
+    font-size: 22px;
+    font-weight: 700;
+    fill: var(--color-text-primary);
+  }
+
+  .donut-legend {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .legend-row {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
     color: var(--color-text-secondary);
   }
 
   .legend-dot {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-  }
-
-  /* Bar Chart */
-  .chart {
-    width: 100%;
-  }
-
-  .chart-bars {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    height: 160px;
-    gap: 8px;
-    padding: 0 4px;
-  }
-
-  .bar-group {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .bar-stack {
-    width: 100%;
-    height: 140px;
-    display: flex;
-    flex-direction: column-reverse;
-    justify-content: flex-start;
-    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-    overflow: hidden;
-  }
-
-  .bar-segment {
-    width: 100%;
-    transition: height 0.5s ease-out;
-    position: relative;
-  }
-
-  .bar-label {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--color-text-tertiary);
-    text-align: center;
-  }
-
-  /* Matrix Grid */
-  .matrix-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-
-  .matrix-quadrant {
-    padding: 20px;
-    background: var(--color-surface-1);
-    border: 2px solid;
-    border-radius: var(--radius-lg);
-    text-align: center;
-  }
-
-  .matrix-label {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    margin-bottom: 12px;
-  }
-
-  .matrix-value {
-    font-size: 36px;
-    font-weight: 700;
-    color: var(--color-text-primary);
-    line-height: 1;
-    margin-bottom: 8px;
-  }
-
-  .matrix-sublabel {
-    font-size: 11px;
-    color: var(--color-text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  /* Insights */
-  .insights-card {
-    padding: 20px;
-  }
-
-  .insights-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .insight-item {
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-  }
-
-  .insight-icon {
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-md);
     flex-shrink: 0;
-    backdrop-filter: blur(var(--blur-sm));
-    -webkit-backdrop-filter: blur(var(--blur-sm));
-    border: 1px solid var(--border-glass-subtle);
   }
 
-  .insight-icon.success {
-    background: rgba(16, 185, 129, 0.1);
-    color: var(--color-success);
+  /* Insights Panel */
+  .insights-panel {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    display: flex;
+    flex-direction: column;
+    min-height: 200px;
   }
 
-  .insight-icon.info {
-    background: rgba(59, 130, 246, 0.1);
-    color: var(--color-info);
-  }
-
-  .insight-icon.warning {
-    background: rgba(245, 158, 11, 0.1);
-    color: var(--color-warning);
-  }
-
-  .insight-icon.neutral {
-    background: var(--glass-surface-2);
-    color: var(--color-text-secondary);
-  }
-
-  .insight-content {
+  .insights-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     flex: 1;
+    min-height: 120px;
+  }
+
+  .insight-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
   .insight-text {
-    font-size: 14px;
-    color: var(--color-text-secondary);
-    line-height: 1.5;
-    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
   }
 
-  .insight-text strong {
-    color: var(--color-text-primary);
+  .insight-title {
+    font-size: 11px;
     font-weight: 600;
+    color: var(--color-text-primary);
   }
 
-  .insight-bar {
-    height: 4px;
-    background: var(--color-surface-2);
-    border-radius: var(--radius-full);
-    overflow: hidden;
-  }
-
-  .insight-bar-fill {
-    height: 100%;
-    border-radius: var(--radius-full);
-    transition: width 0.5s ease-out;
-  }
-
-  .insight-bar-fill.success {
-    background: var(--color-success);
-  }
-
-  .insight-bar-fill.info {
-    background: var(--color-info);
-  }
-
-  .insight-bar-fill.warning {
-    background: var(--color-warning);
+  .insight-detail {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--color-text-tertiary);
   }
 </style>

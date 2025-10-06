@@ -82,16 +82,11 @@
 
 <style>
   .bottom-nav {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(var(--blur-lg));
     -webkit-backdrop-filter: blur(var(--blur-lg));
     border-top: 1px solid var(--border-glass-strong);
     box-shadow: var(--shadow-glass-lg);
-    z-index: 1000;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 

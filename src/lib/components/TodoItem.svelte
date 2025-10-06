@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { Check, Trash2 } from "@lucide/svelte";
+  import { Trash2 } from "@lucide/svelte";
   import type { Id } from "../../convex/_generated/dataModel";
+  import { Checkbox } from "./ui";
 
   interface Props {
     id: Id<"todos"> | string;
@@ -22,17 +23,10 @@
 </script>
 
 <li class="todo-item {isOptimistic ? 'optimistic' : ''}">
-  <button
+  <Checkbox 
+    checked={isCompleted}
     onclick={() => onToggle(id)}
-    class="todo-checkbox"
-    aria-label="Toggle todo completion"
-  >
-    <div class="checkbox-inner {isCompleted ? 'checked' : ''}">
-      {#if isCompleted}
-        <Check size={14} />
-      {/if}
-    </div>
-  </button>
+  />
   <span class="todo-text {isCompleted ? 'completed' : ''}">
     {text}
     {#if isOptimistic}
@@ -73,38 +67,7 @@
     background: var(--glass-surface-2);
   }
 
-  .todo-checkbox {
-    flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-  }
 
-  .checkbox-inner {
-    width: 24px;
-    height: 24px;
-    border: 2px solid var(--border-glass-strong);
-    border-radius: var(--radius-xs);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--transition-fast);
-    color: transparent;
-    background: var(--glass-surface-1);
-    backdrop-filter: blur(var(--blur-sm));
-    -webkit-backdrop-filter: blur(var(--blur-sm));
-    box-shadow: var(--shadow-inset);
-  }
-
-  .checkbox-inner.checked {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    color: white;
-    box-shadow: var(--shadow-sm), var(--glow-accent);
-  }
 
   .todo-text {
     flex: 1;

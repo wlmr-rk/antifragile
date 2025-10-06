@@ -3,27 +3,35 @@
   import { useConvexClient, useQuery } from "convex-svelte";
   import { api } from "../../convex/_generated/api";
   import type { Id } from "../../convex/_generated/dataModel";
+  import { Button, Input, Textarea, FloatingActionButton, Modal } from "$lib/components/ui";
 
   const client = useConvexClient();
   const habitsProgress = useQuery(api.habits.getTodayProgress, {});
   const habitsSummary = useQuery(api.habits.getHabitsSummary, {});
 
-  let showAddHabit = $state(false);
+  let showAddModal = $state(false);
   let newHabitName = $state("");
   let newHabitDescription = $state("");
-  let selectedColor = $state("#8b5cf6");
+  let selectedColor = $state("#a78bfa");
   let selectedFrequency = $state<"daily" | "weekly" | "monthly">("daily");
   let targetCount = $state(1);
+  let selectedUnit = $state("count");
 
   const colors = [
-    { name: "Purple", value: "#8b5cf6" },
-    { name: "Green", value: "#10b981" },
-    { name: "Blue", value: "#3b82f6" },
-    { name: "Orange", value: "#f59e0b" },
-    { name: "Red", value: "#ef4444" },
-    { name: "Pink", value: "#ec4899" },
-    { name: "Cyan", value: "#06b6d4" },
-    { name: "Yellow", value: "#eab308" },
+    { name: "Purple", value: "#a78bfa" },
+    { name: "Green", value: "#34d399" },
+    { name: "Blue", value: "#60a5fa" },
+    { name: "Cyan", value: "#22d3ee" },
+    { name: "Pink", value: "#f472b6" },
+    { name: "Orange", value: "#fb923c" },
+    { name: "Red", value: "#f87171" },
+    { name: "Black", value: "#1a1a1a" },
+  ];
+
+  const units = [
+    { name: "Count", value: "count" },
+    { name: "Liters", value: "liters" },
+    { name: "Hours", value: "hours" },
   ];
 
   // Optimistic state
@@ -72,10 +80,11 @@
       // Reset form
       newHabitName = "";
       newHabitDescription = "";
-      selectedColor = "#8b5cf6";
+      selectedColor = "#a78bfa";
       selectedFrequency = "daily";
       targetCount = 1;
-      showAddHabit = false;
+      selectedUnit = "count";
+      showAddModal = false;
     } catch (error) {
       console.error("Failed to add habit:", error);
     }
@@ -158,10 +167,10 @@
           Start building better habits<br />
           Track your progress daily
         </p>
-        <button class="btn-primary" onclick={() => (showAddHabit = true)}>
+        <Button variant="primary" onclick={() => (showAddModal = true)}>
           <Plus size={20} />
           Add Your First Habit
-        </button>
+        </Button>
       </div>
     {:else}
       {#each habitsWithOptimistic() as habit (habit._id)}
@@ -269,185 +278,111 @@
     {/if}
   </div>
 
-  <!-- Add Habit Panel -->
-  {#if showAddHabit}
-    <div class="modal-overlay" onclick={() => (showAddHabit = false)}>
-      <div class="modal-content" onclick={(e) => e.stopPropagation()}>
-        <div class="modal-header">
-          <h2 class="modal-title">New Habit</h2>
-          <button class="close-btn" onclick={() => (showAddHabit = false)}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M6 6L18 18M6 18L18 6"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
+  <!-- Floating Action Button -->
+  <FloatingActionButton onclick={() => (showAddModal = true)} label="Add habit" />
+
+  <!-- Add Habit Modal -->
+  <Modal open={showAddModal} onClose={() => (showAddModal = false)} title="New Habit">
+    <form onsubmit={handleAddHabit} class="habit-form">
+      <!-- Habit Name -->
+      <div class="form-group">
+        <Input
+          bind:value={newHabitName}
+          placeholder="Habit name"
+          maxlength={50}
+        />
+      </div>
+
+      <!-- Color & Frequency Row -->
+      <div class="form-row">
+        <div class="form-group form-group-half">
+          <label class="form-label">Color</label>
+          <div class="color-selector">
+            {#each colors as color}
+              <button
+                type="button"
+                class="color-dot {selectedColor === color.value ? 'selected' : ''}"
+                style="background: {color.value};"
+                onclick={() => (selectedColor = color.value)}
+                aria-label={color.name}
               />
-            </svg>
-          </button>
+            {/each}
+          </div>
         </div>
 
-        <form onsubmit={handleAddHabit} class="modal-form">
-          <!-- Habit Name -->
-          <div class="form-group">
-            <label class="form-label">Habit Name</label>
-            <input
-              type="text"
-              bind:value={newHabitName}
-              placeholder="e.g., Morning Meditation"
-              class="form-input"
-              maxlength="50"
-              autofocus
-            />
-          </div>
+        <div class="form-group form-group-half">
+          <label class="form-label">Frequency</label>
+          <select
+            class="select-input"
+            bind:value={selectedFrequency}
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+      </div>
 
-          <!-- Description (Optional) -->
-          <div class="form-group">
-            <label class="form-label"
-              >Description <span class="optional">(optional)</span></label
-            >
-            <input
-              type="text"
-              bind:value={newHabitDescription}
-              placeholder="e.g., 10 minutes of mindfulness"
-              class="form-input"
-              maxlength="100"
-            />
-          </div>
-
-          <!-- Color Selection -->
-          <div class="form-group">
-            <label class="form-label">Color</label>
-            <div class="color-grid">
-              {#each colors as color}
-                <button
-                  type="button"
-                  class="color-option {selectedColor === color.value
-                    ? 'selected'
-                    : ''}"
-                  style="background: {color.value};"
-                  onclick={() => (selectedColor = color.value)}
-                  aria-label={color.name}
-                >
-                  {#if selectedColor === color.value}
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path
-                        d="M3 8l3 3 7-7"
-                        stroke="white"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </svg>
-                  {/if}
-                </button>
-              {/each}
-            </div>
-          </div>
-
-          <!-- Frequency -->
-          <div class="form-group">
-            <label class="form-label">Frequency</label>
-            <div class="button-group">
-              <button
-                type="button"
-                class="group-btn {selectedFrequency === 'daily'
-                  ? 'active'
-                  : ''}"
-                onclick={() => (selectedFrequency = "daily")}
-              >
-                Daily
-              </button>
-              <button
-                type="button"
-                class="group-btn {selectedFrequency === 'weekly'
-                  ? 'active'
-                  : ''}"
-                onclick={() => (selectedFrequency = "weekly")}
-              >
-                Weekly
-              </button>
-              <button
-                type="button"
-                class="group-btn {selectedFrequency === 'monthly'
-                  ? 'active'
-                  : ''}"
-                onclick={() => (selectedFrequency = "monthly")}
-              >
-                Monthly
-              </button>
-            </div>
-          </div>
-
-          <!-- Target Count -->
-          <div class="form-group">
-            <label class="form-label">Target Count</label>
-            <div class="counter">
-              <button
-                type="button"
-                class="counter-btn"
-                onclick={() => targetCount > 1 && (targetCount -= 1)}
-                disabled={targetCount <= 1}
-              >
-                −
-              </button>
-              <div class="counter-value">{targetCount}</div>
-              <button
-                type="button"
-                class="counter-btn"
-                onclick={() => targetCount < 10 && (targetCount += 1)}
-                disabled={targetCount >= 10}
-              >
-                +
-              </button>
-            </div>
-            <div class="form-hint">
-              Complete this habit {targetCount}x per {selectedFrequency ===
-              "daily"
-                ? "day"
-                : selectedFrequency === "weekly"
-                  ? "week"
-                  : "month"}
-            </div>
-          </div>
-
-          <!-- Actions -->
-          <div class="modal-actions">
+      <!-- Target & Unit Row -->
+      <div class="form-row">
+        <div class="form-group form-group-half">
+          <label class="form-label">Target</label>
+          <div class="counter-compact">
             <button
               type="button"
-              class="btn-secondary"
-              onclick={() => (showAddHabit = false)}
+              class="counter-btn-sm"
+              onclick={() => targetCount > 1 && (targetCount -= 1)}
+              disabled={targetCount <= 1}
             >
-              Cancel
+              −
             </button>
+            <input
+              type="number"
+              class="counter-input"
+              bind:value={targetCount}
+              min="1"
+              max="99"
+            />
             <button
-              type="submit"
-              class="btn-primary"
-              disabled={!newHabitName.trim()}
+              type="button"
+              class="counter-btn-sm"
+              onclick={() => targetCount < 99 && (targetCount += 1)}
+              disabled={targetCount >= 99}
             >
-              <Plus size={20} />
-              Create Habit
+              +
             </button>
           </div>
-        </form>
-      </div>
-    </div>
-  {/if}
+        </div>
 
-  <!-- Floating Add Button -->
-  <button class="fab" onclick={() => (showAddHabit = true)}>
-    <Plus size={24} strokeWidth={2.5} />
-  </button>
+        <div class="form-group form-group-half">
+          <label class="form-label">Unit</label>
+          <select
+            class="select-input"
+            bind:value={selectedUnit}
+          >
+            {#each units as unit}
+              <option value={unit.value}>{unit.name}</option>
+            {/each}
+          </select>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="modal-actions">
+        <Button type="submit" variant="primary" disabled={!newHabitName.trim()} class="submit-btn-full">
+          <Plus size={20} />
+          Create Habit
+        </Button>
+      </div>
+    </form>
+  </Modal>
 </div>
 
 <style>
   .page {
-    min-height: 100vh;
     background: var(--color-bg-primary);
     padding: 20px;
-    padding-bottom: calc(
-      var(--spacing-bottom-nav) + env(safe-area-inset-bottom, 0px) + 24px
-    );
+    padding-bottom: 24px;
   }
 
   /* Summary Card */
@@ -670,267 +605,158 @@
     margin-bottom: 24px;
   }
 
-  /* Modal */
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(4px);
-    z-index: 2000;
+  /* Habit Form */
+  .habit-form {
     display: flex;
-    align-items: flex-end;
-    animation: fadeIn 0.2s ease-out;
-  }
-
-  .modal-content {
-    width: 100%;
-    max-height: 90vh;
-    background: var(--color-bg-elevated);
-    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-    overflow-y: auto;
-    animation: slideUp 0.3s ease-out;
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 24px 20px;
-    border-bottom: 1px solid var(--color-border-subtle);
-  }
-
-  .modal-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--color-text-primary);
-    margin: 0;
-  }
-
-  .close-btn {
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--color-surface-1);
-    border: none;
-    border-radius: var(--radius-md);
-    color: var(--color-text-secondary);
-    cursor: pointer;
-  }
-
-  .close-btn:active {
-    transform: scale(0.95);
-  }
-
-  /* Form */
-  .modal-form {
-    padding: 24px 20px;
+    flex-direction: column;
+    gap: 14px;
   }
 
   .form-group {
-    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
-  .form-label {
-    display: block;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    margin-bottom: 8px;
-  }
-
-  .optional {
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--color-text-tertiary);
-  }
-
-  .form-input {
-    width: 100%;
-    padding: 12px 16px;
-    font-size: 15px;
-    background: var(--color-surface-1);
-    color: var(--color-text-primary);
-    border: 1px solid var(--color-border-medium);
-    border-radius: var(--radius-md);
-    outline: none;
-    transition: all var(--transition-fast);
-  }
-
-  .form-input:focus {
-    border-color: var(--color-accent);
-    background: var(--color-surface-2);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-  }
-
-  .form-hint {
-    font-size: 12px;
-    color: var(--color-text-tertiary);
-    margin-top: 6px;
-  }
-
-  /* Color Grid */
-  .color-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
+  .form-row {
+    display: flex;
     gap: 12px;
   }
 
-  .color-option {
-    aspect-ratio: 1;
-    border-radius: var(--radius-md);
-    border: 3px solid transparent;
-    cursor: pointer;
+  .form-group-half {
+    flex: 1;
+  }
+
+  .form-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Color Selector - Minimal Dots */
+  .color-selector {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--transition-fast);
+    gap: 8px;
+    flex-wrap: wrap;
   }
 
-  .color-option.selected {
-    border-color: white;
-    box-shadow:
-      0 0 0 2px var(--color-bg-elevated),
-      0 0 0 4px currentColor;
+  .color-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
   }
 
-  .color-option:active {
+  .color-dot.selected {
+    border-color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 16px currentColor, 0 2px 8px rgba(0, 0, 0, 0.6);
+    transform: scale(1.1);
+  }
+
+  .color-dot:active {
     transform: scale(0.95);
   }
 
-  /* Button Group */
-  .button-group {
-    display: flex;
-    gap: 8px;
-  }
-
-  .group-btn {
-    flex: 1;
-    padding: 10px;
+  /* Select Input */
+  .select-input {
+    width: 100%;
+    padding: 10px 12px;
     font-size: 14px;
     font-weight: 500;
-    background: var(--color-surface-1);
-    color: var(--color-text-secondary);
-    border: 1px solid var(--color-border-medium);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-  }
-
-  .group-btn.active {
-    background: var(--color-accent);
-    color: white;
-    border-color: var(--color-accent);
-  }
-
-  .group-btn:active {
-    transform: scale(0.98);
-  }
-
-  /* Counter */
-  .counter {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    justify-content: center;
-    padding: 16px;
-    background: var(--color-surface-1);
-    border-radius: var(--radius-lg);
-  }
-
-  .counter-btn {
-    width: 44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    font-weight: 600;
-    background: var(--color-surface-2);
+    font-family: inherit;
+    background: rgba(255, 255, 255, 0.04);
     color: var(--color-text-primary);
-    border: 1px solid var(--color-border-medium);
-    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    outline: none;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: all 0.2s ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23a0a0a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
   }
 
-  .counter-btn:disabled {
+  .select-input:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 16px rgba(167, 139, 250, 0.3);
+  }
+
+
+
+  /* Compact Counter */
+  .counter-compact {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .counter-btn-sm {
+    width: 36px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 600;
+    background: transparent;
+    color: var(--color-text-primary);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .counter-btn-sm:disabled {
     opacity: 0.3;
     cursor: not-allowed;
   }
 
-  .counter-btn:active:not(:disabled) {
-    transform: scale(0.95);
+  .counter-btn-sm:active:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
   }
 
-  .counter-value {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--color-text-primary);
-    min-width: 60px;
+  .counter-input {
+    flex: 1;
+    height: 38px;
     text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    background: transparent;
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    outline: none;
+    -moz-appearance: textfield;
+  }
+
+  .counter-input::-webkit-outer-spin-button,
+  .counter-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
 
   /* Modal Actions */
   .modal-actions {
     display: flex;
     gap: 12px;
-    margin-top: 32px;
+    margin-top: 4px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
-  /* FAB */
-  .fab {
-    position: fixed;
-    bottom: calc(
-      var(--spacing-bottom-nav) + env(safe-area-inset-bottom, 0px) + 24px
-    );
-    right: 20px;
-    width: 56px;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--color-accent);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    box-shadow: var(--shadow-xl), var(--glow-accent);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    z-index: 100;
-  }
-
-  .fab:active {
-    transform: scale(0.9);
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes slideUp {
-    from {
-      transform: translateY(100%);
-    }
-    to {
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes scaleIn {
-    from {
-      transform: scale(0);
-      opacity: 0;
-    }
-    to {
-      transform: scale(1);
-      opacity: 1;
-    }
+  :global(.submit-btn-full) {
+    flex: 1;
   }
 </style>
